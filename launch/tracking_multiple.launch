@@ -1,6 +1,6 @@
 <launch>
-  <node name="ekf" pkg="tracking" type="ekf_multiple.py" output="screen">
-  <node pkg="tracking" type="fitcircle_multiple.py" name="FitCircle" /> 
+  <node pkg="tracking" type="dbscan.py" name="FitCircle" /> 
+  <node name="ekf" pkg="tracking" type="ekf_multiple.py" output="screen"/>
   <node pkg="tracking" type="vis_multiple.py" name="Visualisation" /> 
-  </node>
+  <node pkg="rviz" type="rviz" name="Rviz" /> 
 </launch>
