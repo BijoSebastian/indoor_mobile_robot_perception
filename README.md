@@ -17,7 +17,10 @@ Implementaion:
 Expected output:
 
 >You ll be able to see the visualization of point cloud in rviz and the visualization of clustering in a matplot window.  
->In the tracking_multiple.launch, you ll be able to see the number of people detected and their pose from EKF.  
+>In the tracking_multiple.launch, you ll be able to see the number of people detected and their pose from EKF.
+![ekf_in_action](https://github.com/BijoSebastian/indoor_mobile_robot_perception/assets/94777050/f3b60560-f8be-41f1-b0cf-dbde943fb55a)
+
+
 
 
 
