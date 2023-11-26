@@ -1,0 +1,6 @@
+<launch>
+  <node name="ekf" pkg="Tracking" type="ekf_multiple.py" output="screen">
+  <node pkg="Tracking" type="fitcircle_multiple.py" name="FitCircle" /> 
+  <node pkg="Tracking" type="vis_multiple.py" name="Visualisation" /> 
+  </node>
+</launch>
