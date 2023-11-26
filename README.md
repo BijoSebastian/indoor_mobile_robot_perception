@@ -8,8 +8,8 @@ Terminal 1:
     Launches nodes for Clustering&Fitcircle, EKF and Visualising in rviz
 
 Terminal 2:
-cd bagfiles  
-rosbag play recording2.bag --topics /scan  
+  cd bagfiles  
+  rosbag play recording2.bag --topics /scan  
 
   Description:
     Plays a recording of the lidar scan taken in the corrider with two people walking around
