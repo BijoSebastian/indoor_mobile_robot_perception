@@ -7,7 +7,7 @@ Terminal 1:
   Description:
     Launches nodes for Clustering&Fitcircle, EKF and Visualising in rviz
 
-Terminal 2:
+Terminal 2:  
   'cd bagfiles  
   rosbag play recording2.bag --topics /scan  
 
