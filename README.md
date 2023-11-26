@@ -12,8 +12,8 @@ Implementaion:
   >>rosbag play recording2.bag --topics /scan  
 
   >>Description:
->  >>hi
-    >>>Plays a recording of the lidar scan taken in the corrider with two people walking around
+>  >>Plays a recording of the lidar scan taken in the corrider with two people walking around
+
 
 Expected output:
 
