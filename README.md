@@ -9,6 +9,8 @@ Terminal 1:
 
 Terminal 2:  
   `cd bagfiles  
+  four spaces work too!    
+  
   rosbag play recording2.bag --topics /scan  
 
   Description:
