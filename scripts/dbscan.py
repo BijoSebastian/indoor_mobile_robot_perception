@@ -27,6 +27,25 @@ from std_msgs.msg import Header
 marker = Marker()
 scan = LaserScan()
 
+def avg_cluster(clusters):
+    avgs=[]
+
+    for cluster in clusters:
+
+        
+        polar_cluster = np.array(cluster,dtype=np.float32)
+
+        avg_x = np.mean(polar_cluster[:, 0])
+        avg_y = np.mean(polar_cluster[:, 1])
+
+        # Fit a circle using minEnclosingCircle
+        #center, radius = cv2.minEnclosingCircle(polar_cluster)
+
+        print('avgx',avg_x)
+
+        avgs.append([avg_x,avg_y])
+
+    return avgs
 
 def fit_clusters_into_circles(clusters):
 
@@ -160,17 +179,18 @@ def callback(msg):
 
         #Fit clusters into circles
         try:
-            fitted_circles = fit_clusters_into_circles(clusters) #fitcircle somehow seems to convert the coordiantes to positive
+            #fitted_circles = fit_clusters_into_circles(clusters) 
+            fitted_circles=avg_cluster(clusters) #remove later
         except:
             print("There is error")
 
         people=[]
         for p in fitted_circles:
-            print(p[1])
-            if(p[1]<4 and p[1]>0.01):
-                print("Person Detected!!")
-                people.append(p)
-
+            # print(p[1])
+            # if(p[1]<4 and p[1]>0.01):
+            #     print("Person Detected!!")
+            #     people.append(p)
+            people.append(p)
         print(people)
         lidar_poses=PoseArray()
 
@@ -179,7 +199,7 @@ def callback(msg):
         
         for k in people:
             lidar_pose=Pose()
-            lidar_pose.position.z,lidar_pose.position.x=list(k[0])
+            lidar_pose.position.z,lidar_pose.position.x=k#list(k[0])
 
             lidar_poses.poses.append(lidar_pose)
 
