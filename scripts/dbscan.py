@@ -16,7 +16,9 @@ import numpy as np
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from nav_msgs.msg import Path
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose,PoseArray
+
+from std_msgs.msg import Header
 
 #Maybe later we could use Pose stamped
 
@@ -24,7 +26,26 @@ from geometry_msgs.msg import Pose
 # Global Variables
 marker = Marker()
 scan = LaserScan()
-pose=Pose()
+
+def avg_cluster(clusters):
+    avgs=[]
+
+    for cluster in clusters:
+
+        
+        polar_cluster = np.array(cluster,dtype=np.float32)
+
+        avg_x = np.mean(polar_cluster[:, 0])
+        avg_y = np.mean(polar_cluster[:, 1])
+
+        # Fit a circle using minEnclosingCircle
+        #center, radius = cv2.minEnclosingCircle(polar_cluster)
+
+        print('avgx',avg_x)
+
+        avgs.append([avg_x,avg_y])
+
+    return avgs
 
 def fit_clusters_into_circles(clusters):
 
@@ -36,14 +57,14 @@ def fit_clusters_into_circles(clusters):
             continue
 
         # Convert the cluster from rectangular to polar coordinates
-        polar_cluster = []
-        for point in cluster:
-            r = math.sqrt(point[0]**2 + point[1]**2)
-            theta = math.atan2(point[1], point[0])
-            polar_cluster.append([r, theta])
+        # polar_cluster = []
+        # for point in cluster:
+        #     r = math.sqrt(point[0]**2 + point[1]**2)
+        #     theta = math.atan2(point[1], point[0])
+        #     polar_cluster.append([r, theta])
 
-        # Convert polar coordinates to numpy array
-        polar_cluster = np.array(polar_cluster,dtype=np.float32)
+        # # Convert polar coordinates to numpy array
+        polar_cluster = np.array(cluster,dtype=np.float32)
 
         # Fit a circle using minEnclosingCircle
         center, radius = cv2.minEnclosingCircle(polar_cluster)
@@ -105,6 +126,8 @@ def visualization_point(center):
 def callback(msg):
     # Getting the polar coordinates of the point cloud
     global pose
+
+    
     
     pts_r = np.array(msg.ranges)
     delfi = msg.angle_increment
@@ -116,7 +139,7 @@ def callback(msg):
     newscan_rect = []  #Contains point cloud in rectangular coordinates
     newscan_polar=[] #Contains point cloud in polar coordinates
     for r, ang in zip(pts_r_list, pts_ang_list):
-        if (not np.isinf(r)): #and abs(r)<2):#Constraining scan to 1 radius circle 'and abs(r)<1'
+        if ((not np.isinf(r)) and (abs(r)<2)):#Constraining scan to 1 radius circle 'and abs(r)<1'
             newscan_polar.append([r,ang])
             newscan_rect.append(polartorect([r, ang]))
 
@@ -152,54 +175,36 @@ def callback(msg):
             cluster = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
             clusters.append(cluster[['x', 'y']].values)
 
+        print(cluster)
+
         #Fit clusters into circles
         try:
-            fitted_circles = fit_clusters_into_circles(clusters)
+            #fitted_circles = fit_clusters_into_circles(clusters) 
+            fitted_circles=avg_cluster(clusters) #remove later
         except:
             print("There is error")
 
         people=[]
         for p in fitted_circles:
-            if(p[1]<0.1 and p[1]>0.02):
-                print("Person Detected!!")
-                people.append(p)
-
+            # print(p[1])
+            # if(p[1]<4 and p[1]>0.01):
+            #     print("Person Detected!!")
+            #     people.append(p)
+            people.append(p)
         print(people)
+        lidar_poses=PoseArray()
 
-        # except:
-        #     print("There is an error")
+        lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame")
 
+        
+        for k in people:
+            lidar_pose=Pose()
+            lidar_pose.position.z,lidar_pose.position.x=k#list(k[0])
 
-
-        center_x=(sum(cluster['x'])/len(cluster['x']))
-        center_y=(sum(cluster['y'])/len(cluster['y']))
-
-        pose.position.x=center_x
-        pose.position.y=center_y
-
-        posepub.publish(pose)
-
-        center=[center_x,center_y]
-
-        print("Center1:")
-        print(center)
-
-        visualization_point(center)
-
-    except:
-
-        pose.position.x=math.nan
-        pose.position.y=math.nan
-
-        print(pose.position.x)
-
-        posepub.publish(pose)
+            lidar_poses.poses.append(lidar_pose)
 
 
-    
-
-    #print(DBSCAN_dataset)
-    sns.scatterplot(x='x', y='y',
+        sns.scatterplot(x='x', y='y',
 
                 data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
 
@@ -209,33 +214,59 @@ def callback(msg):
 
     
     
-    plt.plot(0,0,'o')
+        plt.plot(0,0,'o')
     
-    plt.xlim(-10,10)
-    plt.ylim(-10,10)
+        plt.xlim(-10,10)
+        plt.ylim(-10,10)
     
         
 
         #print(cluster)
-
     
+        plt.show(block=False)
+
+        plt.pause(0.00000000001)
+
+        plt.clf()
+
+        #print(lidar_poses)
 
         
 
-        
+        # except:
+        #     print("There is an error")
+
+
+
+        # center_x=(sum(cluster['x'])/len(cluster['x']))
+        # center_y=(sum(cluster['y'])/len(cluster['y']))
+
+        # pose.position.x=center_x
+        # pose.position.y=center_y
+
+        # posepub.publish(pose)
+
+        # center=[center_x,center_y]
+
+        # print("Center1:")
+        # print(center)
+
+        #visualization_point(center)
+
+    except:
+
+        lidar_poses.poses=[]
+
+        #pose_lidar_pub.publish(lidar_poses)
+
+        # posepub.publish(pose)
+
 
     
 
-        
-
+    #print(DBSCAN_dataset)
     
-    
-    
-    plt.show(block=False)
-
-    plt.pause(0.00000000001)
-
-    plt.clf()
+    pose_lidar_pub.publish(lidar_poses)
 
     
 
@@ -244,12 +275,14 @@ def callback(msg):
 
 def main():
 
-    global posepub,visualpub
+    global visualpub,pose_lidar_pub#posepub,
     rospy.init_node('DBSCAN_Clustering')
     
     sub = rospy.Subscriber('/scan', LaserScan, callback)
 
-    posepub=rospy.Publisher('/Pose',Pose,queue_size=10)
+    pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=10)
+
+    #posepub=rospy.Publisher('/Pose',Pose,queue_size=10)
 
     visualpub=rospy.Publisher('/visualpose',Marker,queue_size=10)
 

@@ -17,13 +17,13 @@ def Object_detection_yolo():
 
     print("LOADING YOLO")
 
-    net = cv2.dnn.readNet("/home/winston/catkin_ws/src/Tracking/scripts/yolov4-tiny.cfg", "/home/winston/catkin_ws/src/Tracking/scripts/yolov4-tiny.weights")
+    net = cv2.dnn.readNet("/home/winston/catkin_ws/src/tracking/scripts/yolov4-tiny.cfg", "/home/winston/catkin_ws/src/tracking/scripts/yolov4-tiny.weights")
 
     #save all the names in file o the list classes
 
     classes = []
 
-    with open("/home/winston/catkin_ws/src/Tracking/scripts/coco.names", "r") as f:
+    with open("/home/winston/catkin_ws/src/tracking/scripts/coco.names", "r") as f:
 
         classes = [line.strip() for line in f.readlines()]
 
@@ -160,8 +160,9 @@ def Object_detection_yolo():
                     pose.position.z= 0
 
                     posearray.poses.append(pose)
-                    #cv2.rectangle
+                #cv2.rectangle
 
+                print(posearray)
                 detection_pub.publish(posearray)
 
 
