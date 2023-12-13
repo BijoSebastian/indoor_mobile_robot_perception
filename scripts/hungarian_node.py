@@ -12,13 +12,15 @@ from scipy.optimize import linear_sum_assignment
 import math
 import joblib
 
-lidar_to_pixel = joblib.load('/home/winston/catkin_ws/src/tracking/scripts/linear_regression_model.joblib')
+lidar_to_pixel_px = joblib.load('/home/winston/catkin_ws/src/tracking/scripts/linear_regression_model2.joblib')
+lidar_to_pixel_py = joblib.load('/home/winston/catkin_ws/src/tracking/scripts/linear_regression_model2_2.joblib')
 
 
-
-final_poses=[]
+# final_poses=[]
 prediction_poses=[]
 #Functions
+
+
 
 def cost_matrix(poses1,poses2):
 
@@ -48,7 +50,7 @@ def callback_lidar(msg):
     predicted=[]
     
     for i in msg.poses:
-        print(i)
+        #print(i)
         lidar_poses.append([i.position.x,i.position.z])
 
     
@@ -56,14 +58,36 @@ def callback_lidar(msg):
         #print(j)
         xL=j[0]
         zL=j[1]
-        poly = PolynomialFeatures(degree=5)
-        translidpose = poly.fit_transform([j])
-        predicted=lidar_to_pixel.predict(translidpose)
-        print('predicted:',predicted)
-        #predicted[0][0]= (0.2 -1.37*xL -0.34*zL-1.51*(xL/zL)+0*(zL/xL)-0.22*(xL**2)-0.22*(zL**2)-0.95*(xL*zL))*1000
-        predicted[0][0]= (318.52-1087*xL -1415*(xL/zL)-758*(xL*zL))
+        poly = PolynomialFeatures(degree=23)
+        z_powers = poly.fit_transform([[j[1]]]) #just z
+        #print("just z",z_powers)
+        z_powers_mult_x=z_powers*xL
+        translidpose=np.column_stack((z_powers,z_powers_mult_x))
 
-        lidpix_poses.append(predicted)
+        z_powers_inv=np.reciprocal(z_powers)
+        z_powers_inv_mult_x=z_powers_inv*xL
+        translidpose=np.column_stack((translidpose,z_powers_inv_mult_x))
+
+        #print(translidpose)
+        predicted=float(lidar_to_pixel_px.predict(translidpose))
+
+        poly_py = PolynomialFeatures(degree=2)
+        z_powers_py = poly_py.fit_transform([[j[1]]]) #just z
+
+        z_powers_inv_py=np.reciprocal(z_powers_py)
+        translidpose_py=np.column_stack((z_powers_py,z_powers_inv_py))
+
+        #print(translidpose_py)
+        predicted_py=float(lidar_to_pixel_py.predict(translidpose_py))
+        
+        #print('predicted_py:',predicted_py)
+        #predicted[0][0]= (0.2 -1.37*xL -0.34*zL-1.51*(xL/zL)+0*(zL/xL)-0.22*(xL**2)-0.22*(zL**2)-0.95*(xL*zL))*1000
+        #predicted[0][0]= (318.52-1087*xL -1415*(xL/zL)-758*(xL*zL))
+        #predicted[0][0]= (351.09-178.6*xL -1189.8*(xL/zL)+17.17*(1/zL))
+        #predicted[0][1]= (358.74+62.639*xL+22.544*zL+48.971*(1/zL))
+
+        lidpix_poses.append([predicted,predicted_py])
+        #print(lidpix_poses)
 
 
     
@@ -73,6 +97,8 @@ def callback_lidar(msg):
 def callback_cam(msg):
 
     cam_poses=[]
+    final_poses=[]
+    FinalPoses=PoseArray()
     
     for i in msg.poses:
         cam_poses.append([i.position.x,i.position.y])
@@ -86,13 +112,29 @@ def callback_cam(msg):
     assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
 
     print("Optimal Assignment:")
-    print(len(cam_poses))
-    print(len(lidar_poses))
+    #print(len(cam_poses))
+    #print(len(lidar_poses))
     for row, col in assignment:
         print(f"Pose {lidar_poses[row]} in poses1, assigned to poses {cam_poses[col]} in Poses2")
         print("lidpix poses:")
         print(lidpix_poses[row])
-        #final_poses.append(lidar_poses[row])
+        chosen_pose=lidar_poses[row]
+        final_poses.append(chosen_pose)
+
+        FinalPose=Pose()
+        FinalPose.position.x=chosen_pose[0]
+        FinalPose.position.z=chosen_pose[1]
+
+        FinalPoses.poses.append(FinalPose)
+        
+
+    print(final_poses)
+
+    posepub.publish(FinalPoses)
+
+
+
+    
 
 
 # def callback_prediction(msg):
@@ -133,6 +175,8 @@ def main():
     pose_cam_sub=rospy.Subscriber('/detection_topic',PoseArray,callback_cam)
 
     # pose_cam_sub=rospy.Subscriber('/PosePrediction',PoseArray,callback_prediction)
+
+    posepub=rospy.Publisher('/FinalPoses',PoseArray,queue_size=10)
 
     visualpub=rospy.Publisher('/Pose',Pose,queue_size=10)
 
