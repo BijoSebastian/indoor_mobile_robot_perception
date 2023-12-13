@@ -7,40 +7,95 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2  # importing cv
 
+from scipy.optimize import linear_sum_assignment
+
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose,PoseArray
 from nav_msgs.msg import Path
+from tracking.msg import PoseIDArray,PoseID
 
 
-cam_poses=[]
 
-def cam_callback(msg):
+def cost_matrix(poses1,poses2):
+
+    cost_mat=np.empty([len(poses1),len(poses2)])
+    row=0
+    col=0
+    poses1=np.array(poses1)
+    poses2=np.array(poses2)
+    
+    for i in poses1:
+        for j in poses2:
+            dist=np.linalg.norm((i-j))
+            cost_mat[row,col]=dist
+            col+=1
+        col=0
+        row+=1
+    
+    return cost_mat
+
+
+
+def finalpose_callback(msg):
+    global final_poses,ids
+    final_poses=[]
+    ids=[]
 
     for i in msg.poses:
-        cam_pose=[(i.position.x),(i.position.y)]
-        cam_poses.append(cam_pose)
+        final_pose=[(i.position.x),(i.position.z)]
+        id=i.id
+        final_poses.append(final_pose)
+        ids.append(id)
     
-    print(cam_poses)
+    print(final_poses)
 
-def lidar_callback(msg):
-    lidar_poses=[]
+def predictedpose_callback(msg):
+    global predicted_poses
+    predicted_poses=[]
+    Measurements=PoseIDArray()
 
-    for i in msg.lidar_poses:
-        lidar_pose=[(i.position.x),(i.position.y)]
-        lidar_poses.append(lidar_pose)
-
-    #convert to cam pose
+    for i in msg.poses:
+        predicted_pose=[(i.position.x),(i.position.y)]
+        predicted_poses.append(predicted_pose)
     
-    print(lidar_poses)
+    print(predicted_poses)
 
+    #Hungarian
+
+    cost=cost_matrix(final_poses,predicted_poses)
+
+    #Solve the assignment problem
+    row_indices, col_indices = linear_sum_assignment(cost)
+
+    # # Extract the optimal assignment
+    assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
+
+    print("Optimal Assignment:")
+    #print(len(cam_poses))
+    #print(len(lidar_poses))
+    for row, col in assignment:
+        print(f"Pose {final_poses[row]} in poses1, assigned to poses {predicted_poses[col]} in Poses2")
+
+        Measure_id=PoseID()
+        Measure_id.ID=ids[col]
+        
+        measurementpose=final_poses[row]
+        Measure_id.pose.position.x=measurementpose[0]
+        Measure_id.pose.position.z=measurementpose[1]
+        Measurements.poses.append(Measure_id)
+        
+
+    posepub.publish(Measurements)
 
 
 def main():
-    global camposepub
+    global posepub
     rospy.init_node('MediatorNode')
 
-    cam_pose_sub = rospy.Subscriber('/CamDetections', PoseArray, cam_callback)
-    lidar_pose_sub = rospy.Subscriber('/LidarDetections', PoseArray, lidar_callback)
+    cam_pose_sub = rospy.Subscriber('/FinalPoses', PoseArray, finalpose_callback)
+    predicted_pose_sub = rospy.Subscriber('/PredictedPose', PoseIDArray, predictedpose_callback)
+
+    posepub=rospy.Publisher('/PoseArray',PoseIDArray,queue_size=10)
 
 
     rospy.spin()
@@ -49,4 +104,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-
+#check if this works
