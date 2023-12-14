@@ -101,7 +101,7 @@ def predictedposes_callback(msg):
 
     for i in msg.poses:
         predicted_pose=[(i.pose.position.x),(i.pose.position.y)]
-        id=i.id
+        id=i.ID
         predicted_poses.append(predicted_pose)
         ids.append(id)
     
