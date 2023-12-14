@@ -10,9 +10,10 @@ import cv2  # importing cv
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose,PoseArray
 from nav_msgs.msg import Path
+from tracking.msg import PoseIDArray,PoseID
 
 #Object Initialization
-kalmanpose_array=PoseArray()
+
 
 #Functions
 
@@ -210,7 +211,7 @@ P1=np.array([[1000,0,0,0,0],
 
 rev1=0
 
-id1=0
+id1=1
 
 Xc2=np.array([[1],
               [1],
@@ -232,34 +233,47 @@ P2=np.array([[1000,0,0,0,0],
 
 rev2=0
 
-id2=1
+id2=2
 
 people=[person(Xc1,Xp1,P1,rev1,id1),person(Xc2,Xp2,P2,rev2,id2)]
 
-for i in people:
-    print("Initially...")
-    print(i.id)
-    print(i.Xc)
-    print(i.P)
+iterations=0
 
-print("The measurements...")
+#for i in people:
+#     print("Initially...")
+#     print(i.id)
+#     print(i.Xc)
+#     print(i.P)
+
+# print("The measurements...")
+
+people=[]
 
 
 def callback(msg):
     #global actualpath, kalmanpath
     #global X1,P1,H1,R1,I1,X2,P2,H2,R2,I2,XP1,YP1,THETAP1,XP2,YP2,THETAP2,
-    global trackingstarted
+    global trackingstarted,iterations
 
-    pose_array=msg.poses
+    kalmanpose_array=PoseArray()
+    kalmanpredpose_array=PoseIDArray()
+    pose_array=[]
+    
+    for t in msg.poses:
+        pose=[t.ID,t.pose.position.x,t.pose.position.z]
+        pose_array.append(pose)
 
+    # print(people)
     for i in pose_array:
         meas=i[1:3]
         for j in people:
             if(i[0]==j.id):
+                print("Updating")
                 meas_new=(j).heading_angle(meas)
                 (j).measurement_update(meas_new)
+                iterations=0 #Would have to changee this. Each person have their own iterations variable
                 break
-        if(i[0]!=j.id):
+        if(i[0]==0 or i[0]!=j.id):
             print("New created")
             Xc_new=np.array([[meas[0]],
                             [meas[1]],
@@ -290,14 +304,17 @@ def callback(msg):
     index=0
     for k in people:
         if(k.id not in [row[0] for row in pose_array]):
+            iterations+=1
+        if(k.id not in [row[0] for row in pose_array] and iterations>10):
             people.pop(index)
+            #print('Deleted')
         index+=1
 
     for i in people:
-        print("After updation...")
-        print(i.id)
-        print(i.Xc)
-        print(i.P)
+        #print("After updation...")
+        #print(i.id)
+        #print(i.Xc)
+        #print(i.P)
 
         kalmanpose=Pose()
         kalmanpose.position.x=i.Xc[0][0]
@@ -305,20 +322,29 @@ def callback(msg):
         kalmanpose_array.poses.append(kalmanpose)
 
     for i in people:
-        print("Predicting...")
+        #print("Predicting...")
         i.prediction()
-        print(i.id)
-        print(i.Xc)
-        print(i.P)
-        
+        predpose=PoseID()
+        predpose.ID=i.id
+        predpose.pose.position.x=i.Xc[0][0]
+        predpose.pose.position.z=i.Xc[1][0]
+        print(predpose)
+        kalmanpredpose_array.poses.append(predpose)
+        #print(i.id)
+        #print(i.Xc)
+        #print(i.P)
+    # print('After:')
+    # print(people)
     kalmanposepub.publish(kalmanpose_array)
+    kalmanpredictedposepub.publish(kalmanpredpose_array)
 
 def main():
-    global kalmanposepub
+    global kalmanposepub,kalmanpredictedposepub
     rospy.init_node('Kalman_filter')
-    pose_sub = rospy.Subscriber('/PoseArray', PoseArray, callback)
+    pose_sub = rospy.Subscriber('/PoseArray', PoseIDArray, callback)
 
     kalmanposepub=rospy.Publisher('/kalmanposeArray',PoseArray,queue_size=20)
+    kalmanpredictedposepub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=20)
 
     rospy.spin()
 

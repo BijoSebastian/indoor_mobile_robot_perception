@@ -14,7 +14,9 @@ from geometry_msgs.msg import Pose,PoseArray
 from nav_msgs.msg import Path
 from tracking.msg import PoseIDArray,PoseID
 
-
+#Initialization
+predicted_poses=[]
+ids=[]
 
 def cost_matrix(poses1,poses2):
 
@@ -36,29 +38,18 @@ def cost_matrix(poses1,poses2):
 
 
 
-def finalpose_callback(msg):
-    global final_poses,ids
+def finalposes_callback(msg):
+    global final_poses
     final_poses=[]
-    ids=[]
+    Measurements=PoseIDArray()
+    
 
     for i in msg.poses:
         final_pose=[(i.position.x),(i.position.z)]
-        id=i.id
         final_poses.append(final_pose)
-        ids.append(id)
+        
     
-    print(final_poses)
-
-def predictedpose_callback(msg):
-    global predicted_poses
-    predicted_poses=[]
-    Measurements=PoseIDArray()
-
-    for i in msg.poses:
-        predicted_pose=[(i.position.x),(i.position.y)]
-        predicted_poses.append(predicted_pose)
-    
-    print(predicted_poses)
+    #print(final_poses)
 
     #Hungarian
 
@@ -73,6 +64,7 @@ def predictedpose_callback(msg):
     print("Optimal Assignment:")
     #print(len(cam_poses))
     #print(len(lidar_poses))
+    print(assignment)
     for row, col in assignment:
         print(f"Pose {final_poses[row]} in poses1, assigned to poses {predicted_poses[col]} in Poses2")
 
@@ -83,17 +75,46 @@ def predictedpose_callback(msg):
         Measure_id.pose.position.x=measurementpose[0]
         Measure_id.pose.position.z=measurementpose[1]
         Measurements.poses.append(Measure_id)
-        
+    
+    for k in range(0,len(final_poses)):
+        Measure_id=PoseID()
+        ass=np.array(assignment)
+        if(len(ass)==0 or k not in ass[:,0]):
+            measurementpose=final_poses[k]
+            
+            Measure_id.ID=0
+            Measure_id.pose.position.x=measurementpose[0]
+            Measure_id.pose.position.z=measurementpose[1]
+            Measurements.poses.append(Measure_id)
 
+        
+    #for those that didnt get matched to any predictedpose, keep id as math.nan and publish them also.
     posepub.publish(Measurements)
 
+
+def predictedposes_callback(msg):
+    global predicted_poses,ids
+    predicted_poses=[]
+    ids=[]
+    
+
+    for i in msg.poses:
+        predicted_pose=[(i.pose.position.x),(i.pose.position.y)]
+        id=i.ID
+        predicted_poses.append(predicted_pose)
+        ids.append(id)
+    
+    print(predicted_poses)
+    print(ids)
+
+    
 
 def main():
     global posepub
     rospy.init_node('MediatorNode')
 
-    cam_pose_sub = rospy.Subscriber('/FinalPoses', PoseArray, finalpose_callback)
-    predicted_pose_sub = rospy.Subscriber('/PredictedPose', PoseIDArray, predictedpose_callback)
+    final_poses_sub = rospy.Subscriber('/FinalPoses', PoseArray, finalposes_callback)
+    predicted_poses_sub = rospy.Subscriber('/PredictedPoses', PoseIDArray, predictedposes_callback)
 
     posepub=rospy.Publisher('/PoseArray',PoseIDArray,queue_size=10)
 
