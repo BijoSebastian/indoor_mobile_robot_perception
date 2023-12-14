@@ -10,9 +10,10 @@ import cv2  # importing cv
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose,PoseArray
 from nav_msgs.msg import Path
+from tracking.msg import PoseIDArray,PoseID
 
 #Object Initialization
-kalmanpose_array=PoseArray()
+
 
 #Functions
 
@@ -250,7 +251,14 @@ def callback(msg):
     #global X1,P1,H1,R1,I1,X2,P2,H2,R2,I2,XP1,YP1,THETAP1,XP2,YP2,THETAP2,
     global trackingstarted
 
-    pose_array=msg.poses
+    kalmanpose_array=PoseArray()
+    kalmanpredpose_array=PoseIDArray()
+    pose_array=[]
+    
+    for t in msg.poses:
+        pose=[t.ID,t.pose.position.x,t.pose.position.z]
+        pose_array.append(pose)
+
 
     for i in pose_array:
         meas=i[1:3]
@@ -307,18 +315,25 @@ def callback(msg):
     for i in people:
         print("Predicting...")
         i.prediction()
+        predpose=PoseID()
+        predpose.ID=i.id
+        predpose.pose.position.x=i.Xc[0][0]
+        predpose.pose.position.z=i.Xc[1][0]
+        kalmanpredpose_array.poses.append(predpose)
         print(i.id)
         print(i.Xc)
         print(i.P)
         
     kalmanposepub.publish(kalmanpose_array)
+    kalmanpredictedposepub.publish(kalmanpredpose_array)
 
 def main():
-    global kalmanposepub
+    global kalmanposepub,kalmanpredictedposepub
     rospy.init_node('Kalman_filter')
-    pose_sub = rospy.Subscriber('/PoseArray', PoseArray, callback)
+    pose_sub = rospy.Subscriber('/PoseArray', PoseIDArray, callback)
 
     kalmanposepub=rospy.Publisher('/kalmanposeArray',PoseArray,queue_size=20)
+    kalmanpredictedposepub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=20)
 
     rospy.spin()
 

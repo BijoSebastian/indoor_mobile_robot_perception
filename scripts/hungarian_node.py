@@ -116,7 +116,7 @@ def callback_cam(msg):
     #print(len(lidar_poses))
     for row, col in assignment:
         print(f"Pose {lidar_poses[row]} in poses1, assigned to poses {cam_poses[col]} in Poses2")
-        print("lidpix poses:")
+        print("The predictions from model was:")
         print(lidpix_poses[row])
         chosen_pose=lidar_poses[row]
         final_poses.append(chosen_pose)
