@@ -239,13 +239,15 @@ people=[person(Xc1,Xp1,P1,rev1,id1),person(Xc2,Xp2,P2,rev2,id2)]
 
 iterations=0
 
-for i in people:
-    print("Initially...")
-    print(i.id)
-    print(i.Xc)
-    print(i.P)
+#for i in people:
+#     print("Initially...")
+#     print(i.id)
+#     print(i.Xc)
+#     print(i.P)
 
-print("The measurements...")
+# print("The measurements...")
+
+people=[]
 
 
 def callback(msg):
@@ -261,18 +263,17 @@ def callback(msg):
         pose=[t.ID,t.pose.position.x,t.pose.position.z]
         pose_array.append(pose)
 
-
+    # print(people)
     for i in pose_array:
         meas=i[1:3]
-        #print(i)
-        #print(people)
         for j in people:
             if(i[0]==j.id):
+                print("Updating")
                 meas_new=(j).heading_angle(meas)
                 (j).measurement_update(meas_new)
                 iterations=0 #Would have to changee this. Each person have their own iterations variable
                 break
-        if(i[0]!=j.id):
+        if(i[0]==0 or i[0]!=j.id):
             print("New created")
             Xc_new=np.array([[meas[0]],
                             [meas[1]],
@@ -306,13 +307,14 @@ def callback(msg):
             iterations+=1
         if(k.id not in [row[0] for row in pose_array] and iterations>10):
             people.pop(index)
+            #print('Deleted')
         index+=1
 
     for i in people:
-        print("After updation...")
-        print(i.id)
-        print(i.Xc)
-        print(i.P)
+        #print("After updation...")
+        #print(i.id)
+        #print(i.Xc)
+        #print(i.P)
 
         kalmanpose=Pose()
         kalmanpose.position.x=i.Xc[0][0]
@@ -320,17 +322,19 @@ def callback(msg):
         kalmanpose_array.poses.append(kalmanpose)
 
     for i in people:
-        print("Predicting...")
+        #print("Predicting...")
         i.prediction()
         predpose=PoseID()
         predpose.ID=i.id
         predpose.pose.position.x=i.Xc[0][0]
         predpose.pose.position.z=i.Xc[1][0]
+        print(predpose)
         kalmanpredpose_array.poses.append(predpose)
-        print(i.id)
-        print(i.Xc)
-        print(i.P)
-    
+        #print(i.id)
+        #print(i.Xc)
+        #print(i.P)
+    # print('After:')
+    # print(people)
     kalmanposepub.publish(kalmanpose_array)
     kalmanpredictedposepub.publish(kalmanpredpose_array)
 

@@ -78,9 +78,8 @@ def finalposes_callback(msg):
     
     for k in range(0,len(final_poses)):
         Measure_id=PoseID()
-        assignment=[[1,1]]
         ass=np.array(assignment)
-        if(k not in ass[:,0]):
+        if(len(ass)==0 or k not in ass[:,0]):
             measurementpose=final_poses[k]
             
             Measure_id.ID=0
