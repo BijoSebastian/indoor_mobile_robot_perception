@@ -9,6 +9,7 @@ import math
 from visualization_msgs.msg import Marker,MarkerArray
 from geometry_msgs.msg import Pose,PoseStamped,PoseArray
 from nav_msgs.msg import Path
+from tracking.msg import PoseID,PoseIDArray
 
 #Object Initialization
 kalman_path1=Path()
@@ -90,15 +91,15 @@ def visualization_markers(posearray):
         tempmarker.header.stamp = rospy.Time.now()
         
         tempmarker.action = Marker.ADD
-        tempmarker.id = markerid
+        tempmarker.id = i.ID
 
         tempmarker.color.r = color-0.2
         tempmarker.color.g = color
         tempmarker.color.b = color-0.3
         tempmarker.color.a = 1.0
 
-        tempmarker.pose.position.x=i.position.x
-        tempmarker.pose.position.y=i.position.y
+        tempmarker.pose.position.x=i.pose.position.x
+        tempmarker.pose.position.y=i.pose.position.y
         tempmarker.pose.position.z=0
 
         markerarray.markers.append(tempmarker)
@@ -114,12 +115,14 @@ def visualization_markers(posearray):
 def kalman_callback(pose_array):
 
     kalman_pathmaker(pose_array.poses[0],kalman_path1,kalman_path_pub1)
-    kalman_pathmaker(pose_array.poses[1],kalman_path2,kalman_path_pub2)
+    #kalman_pathmaker(pose_array.poses[1],kalman_path2,kalman_path_pub2)
 
 def kalman_pathmaker(pose,kalman_path,kalman_path_pub):
 
-    x = pose.position.x
-    y = pose.position.y
+    x = pose.position.y
+    y = pose.position.x
+
+    #print(pose)
 
           
     kalman_path.header.frame_id="map"
@@ -165,7 +168,7 @@ def main():
 
     kalman_pose_sub = rospy.Subscriber('/kalmanposeArray',PoseArray,kalman_callback)
 
-    measured_pose_sub = rospy.Subscriber('/PoseArray',PoseArray,measured_callback)
+    measured_pose_sub = rospy.Subscriber('/PoseArray',PoseIDArray,measured_callback)
 
     kalman_path_pub1=rospy.Publisher('/kalman_path1',Path,queue_size=20)
     kalman_path_pub2=rospy.Publisher('/kalman_path2',Path,queue_size=20)
