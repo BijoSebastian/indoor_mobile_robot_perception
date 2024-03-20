@@ -75,7 +75,7 @@ def visualization_markers(posearray,publisher):
     markerarray=MarkerArray()
     tempmarker=Marker()
     
-    tempmarker.header.frame_id = "laser"
+    tempmarker.header.frame_id = "map"
     tempmarker.type = Marker.SPHERE
 
     

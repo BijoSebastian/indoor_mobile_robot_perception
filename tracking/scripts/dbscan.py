@@ -128,7 +128,7 @@ def callback(msg):
     global pose
 
     
-    
+    ptime=msg.header.stamp
     pts_r = np.array(msg.ranges)
     delfi = msg.angle_increment
     pts_ang = np.arange(start=msg.angle_min, stop=msg.angle_max, step=delfi)
@@ -194,7 +194,8 @@ def callback(msg):
         print(people)
         lidar_poses=PoseArray()
 
-        lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame")
+        #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
+        lidar_poses.header = Header(stamp=ptime, frame_id="base_frame")
 
         
         for k in people:

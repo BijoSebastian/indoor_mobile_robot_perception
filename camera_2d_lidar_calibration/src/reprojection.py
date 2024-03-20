@@ -13,6 +13,7 @@ import laser_geometry.laser_geometry as lg
 import sensor_msgs.point_cloud2 as pc2
 from scipy.optimize import linear_sum_assignment
 from std_msgs.msg import Header
+import time
 
 #HUNGARIAN ALGORITHM
 def cost_matrix(poses1,poses2):
@@ -37,7 +38,9 @@ def cost_matrix(poses1,poses2):
 
 def Object_detection_yolo(img):
 
-    global cam_detections
+    cam_detections=[]
+    print('Entered object detection')
+    entertime=time.time()
     height= img.shape[0]
 
     width= img.shape[1]
@@ -150,10 +153,19 @@ def Object_detection_yolo(img):
     for i in range(len(posearray.poses)):
         try:
             cv2.circle(img, (int(round(posearray.poses[i].position.x)),int(round(posearray.poses[i].position.y))), detection_point_radius, (255,0,0), -1)
+            print(np.shape(img))
+            print((int(round(posearray.poses[i].position.x)),int(round(posearray.poses[i].position.y))))
+            print("Circle marked!!!!!!!!!!!!!!!!!!!")
         except OverflowError:
             continue
+    
+    print('Leave object detection')
+    leavetime=time.time()
+    timetaken=leavetime-entertime
+    print('Timetaken:',timetaken)
 
-    detection_pub.publish(posearray) #This publishes the cam detections. Not really needed for now. But let it be.
+    return posearray,cam_detections
+    #detection_pub.publish(posearray) #This publishes the cam detections. Not really needed for now. But let it be.
 
 
 def get_z(T_cam_world, T_world_pc, K):
@@ -244,6 +256,7 @@ def detection_callback(detections):
     for i in range(len(detected_points)):
         try:
             cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
+            print('Red circle marked!!')
         except OverflowError:
             continue
 
@@ -329,7 +342,127 @@ def scan_callback(scan):
         except OverflowError:
             continue
 
+
+def callback(image,detections,scan):
+    print('callback working') 
+
+    img = bridge.imgmsg_to_cv2(image)
+
+    #Scan part
+    rospy.loginfo("scan timestamp: %d ns" % scan.header.stamp.to_nsec())
+    cloud = lp.projectLaser(scan)
+    points = pc2.read_points(cloud)
+    objPoints = np.array([extract(point) for point in points])
+    #objPoints = np.array(map(extract, points))
     
+    Z = get_z(q, objPoints, K)
+    
+    objPoints = objPoints[Z > 0]
+    
+    if lens == 'pinhole':
+        img_points, _ = cv2.projectPoints(objPoints, rvec, tvec, K, D)
+        
+    elif lens == 'fisheye':
+        objPoints = np.reshape(objPoints, (1,objPoints.shape[0],objPoints.shape[1]))
+        img_points, _ = cv2.fisheye.projectPoints(objPoints, rvec, tvec, K, D)
+        
+    
+    img_points = np.squeeze(img_points)
+
+    for i in range(len(img_points)):
+        try:
+            cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
+        except OverflowError:
+            continue
+    
+    #Image part
+    #global img,cam_detections  #cam_detections stores the list of camera detections
+    #cam_detections=[]
+    rospy.loginfo("image timestamp: %d ns" % image.header.stamp.to_nsec())
+    # img = bridge.imgmsg_to_cv2(img)
+    camposearray,cam_detections=Object_detection_yolo(img)
+
+    #Detection part
+
+    paired_poses=[]
+    filtered_poses=PoseArray()
+    filtered_poses.header= Header(stamp=rospy.Time.now(),frame_id='base_frame')
+
+    obj_detected_Points = np.array([extract_PoseArray(point) for point in detections.poses])
+    Z_detections = get_z(q, obj_detected_Points, K)
+    obj_detected_Points=obj_detected_Points[Z_detections>0]
+
+    if lens == 'pinhole':
+        #Detections Projection
+        detected_points, _ = cv2.projectPoints(obj_detected_Points, rvec, tvec, K, D)
+    elif lens == 'fisheye':
+        #Detections Projection
+        obj_detected_Points = np.reshape(obj_detected_Points, (1,obj_detected_Points.shape[0],obj_detected_Points.shape[1]))
+        detected_points, _ = cv2.fisheye.projectPoints(obj_detected_Points, rvec, tvec, K, D)
+    
+    detected_points = np.squeeze(detected_points)
+    print("shape:",np.shape(obj_detected_Points))
+    for i in range(len(detected_points)):
+        try:
+            cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
+            print('Red circle marked!!')
+        except OverflowError:
+            continue
+
+    cost=cost_matrix(detected_points,cam_detections)
+
+    print('Detection Points:',detected_points)
+    print('Cam detections:',cam_detections)
+
+    #Solve the assignment problem
+    row_indices, col_indices = linear_sum_assignment(cost)
+
+    # # Extract the optimal assignment
+    assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
+
+    print("Optimal Assignment:")
+    #print(len(cam_poses))
+    #print(len(lidar_poses))
+    print((assignment))
+    
+    for row, col in assignment:
+        print(f"Pose {obj_detected_Points[0][row]} in poses1, assigned to poses {cam_detections[col]} in Poses2")
+        print("The projection of scan point was:")
+        print(detected_points[row])
+        paired_pose=[obj_detected_Points[0][row],cam_detections[col]] #[Laser detections, camera detections]
+        paired_poses.append(paired_pose)
+
+    print(paired_poses)
+
+    for k in paired_poses:
+        filtered_pose=Pose()
+        filtered_pose.position.x,filtered_pose.position.y=k[0][0],k[0][1]
+        filtered_poses.poses.append(filtered_pose)
+    
+    filtered_laser_pub.publish(filtered_poses)
+
+
+    #     FinalPose=Pose()
+    #     FinalPose.position.x=chosen_pose[0]
+    #     FinalPose.position.z=chosen_pose[1]
+
+    #     FinalPoses.poses.append(FinalPose)
+        
+
+    # print(final_poses)
+
+    # posepub.publish(FinalPoses)
+
+
+    pub.publish(bridge.cv2_to_imgmsg(img))
+
+
+
+    detection_pub.publish(camposearray)
+
+
+
+
 rospy.init_node('reprojection')
 scan_topic = rospy.get_param("~scan_topic")
 image_topic = rospy.get_param("~image_topic")
@@ -344,13 +477,13 @@ lp = lg.LaserProjection()
 
 print("LOADING YOLO")
 
-net = cv2.dnn.readNet("/home/asl/catkin_ws/src/camera_2d_lidar_calibration/src/yolov4-tiny.cfg","/home/asl/catkin_ws/src/camera_2d_lidar_calibration/src/yolov4-tiny.weights")
+net = cv2.dnn.readNet("/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.cfg","/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.weights")
 
 #save all the names in file of the list classes
 
 classes = []
 
-with open("/home/asl/catkin_ws/src/camera_2d_lidar_calibration/src/coco.names", "r") as f:
+with open("/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/coco.names", "r") as f:
 
     classes = [line.strip() for line in f.readlines()]
 
@@ -421,8 +554,12 @@ detection_sub = message_filters.Subscriber(detection_topic, PoseArray, queue_siz
 # ts.registerCallback(callback)
 
 ts = message_filters.ApproximateTimeSynchronizer([image_sub,detection_sub,scan_sub], 10, time_diff) #
-detection_sub.registerCallback(detection_callback)
-image_sub.registerCallback(image_callback)
-scan_sub.registerCallback(scan_callback)
+# detection_sub.registerCallback(detection_callback)
+# image_sub.registerCallback(image_callback)
+# scan_sub.registerCallback(scan_callback)
+
+ts.registerCallback(callback)
 
 rospy.spin()
+
+
