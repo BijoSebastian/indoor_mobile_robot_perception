@@ -11,6 +11,8 @@ from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose,PoseArray
 from nav_msgs.msg import Path
 from tracking.msg import PoseIDArray,PoseID
+from std_msgs.msg import Header
+import time
 
 #Object Initialization
 
@@ -253,11 +255,26 @@ people=[]
 def callback(msg):
     #global actualpath, kalmanpath
     #global X1,P1,H1,R1,I1,X2,P2,H2,R2,I2,XP1,YP1,THETAP1,XP2,YP2,THETAP2,
-    global trackingstarted,iterations
+    global trackingstarted,iterations,kalmanpredpose_array,callbackactive
+
+    callbackactive=True
+    print("CALLBACK ACTIVATED!")
+
+    prediction_time_nsec=msg.header.stamp.to_nsec()
+    prediction_time_sec=prediction_time_nsec*(10**(-9))
+    prediction_time_sec+=1
+    predicted_time=rospy.Time.from_seconds(prediction_time_sec)
+    #There is bit of loss in precision due to above 4 lines
+
+    present_time=msg.header.stamp
 
     kalmanpose_array=PoseIDArray()
+    kalmanpose_array.header= Header(stamp=present_time,frame_id='base_frame')
     kalmanpredpose_array=PoseIDArray()
+    kalmanpredpose_array.header= Header(stamp=predicted_time,frame_id='base_frame')
     pose_array=[]
+
+    
     
     for t in msg.poses:
         pose=[t.ID,t.pose.position.x,t.pose.position.z]
@@ -345,13 +362,39 @@ def callback(msg):
     kalmanposepub.publish(kalmanpose_array)
     kalmanpredictedposepub.publish(kalmanpredpose_array)
 
+    callbackactive=False
+
+def scan_callback(scan):
+    ptime=scan.header.stamp
+    kalmanpredpose_array=PoseIDArray()
+    kalmanpredpose_array.header= Header(stamp=ptime,frame_id='base_frame')
+    dummy_pred_pose=PoseID()
+    dummy_pred_pose.pose.position.x=0
+    dummy_pred_pose.pose.position.y=0
+    kalmanpredpose_array.poses.append(dummy_pred_pose)
+
+    if(not callbackactive):
+        kalmanpredictedposepub.publish(kalmanpredpose_array)
+
 def main():
-    global kalmanposepub,kalmanpredictedposepub
+    global kalmanposepub,kalmanpredictedposepub,callbackactive
+    callbackactive=False
     rospy.init_node('Kalman_filter')
     pose_sub = rospy.Subscriber('/Measurements', PoseIDArray, callback)
+    scan_sub=rospy.Subscriber('/scan', LaserScan, scan_callback)
 
     kalmanposepub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=20)
+
     kalmanpredictedposepub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=20)
+    kalmanpredpose_array=PoseIDArray()
+
+
+    # while not rospy.is_shutdown():
+    #     if(not callbackactive):
+    #         #rospy.loginfo("Publishing predicted poses as callback not active:")
+    #         kalmanpredpose_array.header= Header(stamp=rospy.Time.now(),frame_id='base_frame')
+    #         time.sleep(5)
+    #         kalmanpredictedposepub.publish(kalmanpredpose_array)
 
     rospy.spin()
 
