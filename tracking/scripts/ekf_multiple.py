@@ -53,12 +53,13 @@ class person:
     #Last id
     last_id=1
 
-    def __init__(self,Xc,Xp,P,rev,id):
+    def __init__(self,Xc,Xp,P,rev,id,iterations):
         self.Xc=Xc
         self.Xp=Xp
         self.P=P
         self.rev=rev
         self.id=id
+        self.iterations=iterations
 
     #Functions pertaining to the model of a person
 
@@ -190,80 +191,21 @@ class person:
         k=np.matmul(np.matmul(self.P,(person.H.transpose())),(np.linalg.inv(s)))
         self.Xc=self.Xc+np.matmul(k,y)
         p_updated=np.matmul((person.I-np.matmul(k,person.H)),self.P)
+        self.iterations=0
 
 
-#Initial Condition    
-Xc1=np.array([[0],
-              [0],
-              [0],
-              [1],
-              [0]])
 
-Xp1=np.array([[0],
-              [0],
-              [0],
-              [0],
-              [0]])
-
-P1=np.array([[1000,0,0,0,0],
-              [0,1000,0,0,0],
-              [0,0,1000,0,0],
-              [0,0,0,1000,0],
-              [0,0,0,0,1000]])
-
-rev1=0
-
-id1=1
-
-Xc2=np.array([[1],
-              [1],
-              [0],
-              [0],
-              [0]])
-
-Xp2=np.array([[0],
-              [0],
-              [0],
-              [0],
-              [0]])
-
-P2=np.array([[1000,0,0,0,0],
-              [0,1000,0,0,0],
-              [0,0,1000,0,0],
-              [0,0,0,1000,0],
-              [0,0,0,0,1000]])
-
-rev2=0
-
-id2=2
-
-people=[person(Xc1,Xp1,P1,rev1,id1),person(Xc2,Xp2,P2,rev2,id2)]
-
-iterations=0
-
-#for i in people:
-#     print("Initially...")
-#     print(i.id)
-#     print(i.Xc)
-#     print(i.P)
-
-# print("The measurements...")
-
-people=[]
 
 
 def callback(msg):
-    #global actualpath, kalmanpath
-    #global X1,P1,H1,R1,I1,X2,P2,H2,R2,I2,XP1,YP1,THETAP1,XP2,YP2,THETAP2,
-    global trackingstarted,iterations,kalmanpredpose_array,callbackactive
-
-    callbackactive=True
-    print("CALLBACK ACTIVATED!")
+    
+    global trackingstarted,iterations,kalmanpredpose_array
+    print("CALLBACK ACTIVATED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
     prediction_time_nsec=msg.header.stamp.to_nsec()
     prediction_time_sec=prediction_time_nsec*(10**(-9))
     prediction_time_sec+=1
-    predicted_time=rospy.Time.from_seconds(prediction_time_sec)
+    predicted_time=rospy.Time.from_seconds(prediction_time_sec) #This is supposed to activaate the second iteration in HAnode 
     #There is bit of loss in precision due to above 4 lines
 
     present_time=msg.header.stamp
@@ -271,28 +213,23 @@ def callback(msg):
     kalmanpose_array=PoseIDArray()
     kalmanpose_array.header= Header(stamp=present_time,frame_id='base_frame')
     kalmanpredpose_array=PoseIDArray()
-    kalmanpredpose_array.header= Header(stamp=predicted_time,frame_id='base_frame')
-    pose_array=[]
+    kalmanpredpose_array.header= Header(stamp=present_time,frame_id='base_frame') #supposed to be predicted_time
+    pose_list=[]
 
-    
-    
     for t in msg.poses:
-        pose=[t.ID,t.pose.position.x,t.pose.position.z]
-        pose_array.append(pose)
+        pose=[t.ID,t.pose.position.x,t.pose.position.y]
+        pose_list.append(pose)
 
-    # print(people)
-    for i in pose_array:
-        print('posearray:',pose_array)
+    for i in pose_list:
         meas=i[1:3]
         for j in people:
             if(i[0]==j.id):
-                print("Updating")
+                print("UPDATING POSE OF ",j.id)
                 meas_new=(j).heading_angle(meas)
                 (j).measurement_update(meas_new)
-                iterations=0 #Would have to changee this. Each person have their own iterations variable
                 break
         if(i[0]==0 or i[0]!=j.id):
-            print("New created")
+            print("NEW CREATED")
             Xc_new=np.array([[meas[0]],
                             [meas[1]],
                             [0],
@@ -315,30 +252,24 @@ def callback(msg):
 
             id_new=person.last_id+1
             person.last_id+=1
-            print('People initially:',people)
-            people.append(person(Xc_new,Xp_new,P_new,rev_new,id_new))
-            print('People after:',people)
+            iterations_new=0
+            print('New ID:',id_new)
+            people.append(person(Xc_new,Xp_new,P_new,rev_new,id_new,iterations_new))
 
     #Deletion part
-    index=0
+    index=0                                  
     for k in people:
-        print('ID:',k.id)
         
-        if(k.id not in [row[0] for row in pose_array]):
-            iterations+=1
-            print(iterations)
-        if(k.id not in [row[0] for row in pose_array] and iterations>40):
+        if(k.id not in [row[0] for row in pose_list]):
+            k.iterations+=1
+            
+        if(k.id not in [row[0] for row in pose_list] and k.iterations>20):#add and time_elapse<10
+            print('Deleted ID number:',k.id)
             people.pop(index)
-            print('Deleted')
-            iterations=0
+
         index+=1
 
     for i in people:
-        #print("After updation...")
-        #print(i.id)
-        #print(i.Xc)
-        #print(i.P)
-
         kalmanpose=PoseID()
         kalmanpose.ID=i.id
         kalmanpose.pose.position.x=i.Xc[0][0]
@@ -346,55 +277,31 @@ def callback(msg):
         kalmanpose_array.poses.append(kalmanpose)
 
     for i in people:
-        #print("Predicting...")
         i.prediction()
         predpose=PoseID()
         predpose.ID=i.id
         predpose.pose.position.x=i.Xc[0][0]
-        predpose.pose.position.z=i.Xc[1][0]
-        #print(predpose)
+        predpose.pose.position.y=i.Xc[1][0]
         kalmanpredpose_array.poses.append(predpose)
-        #print(i.id)
-        #print(i.Xc)
-        #print(i.P)
-    # print('After:')
-    # print(people)
-    kalmanposepub.publish(kalmanpose_array)
-    kalmanpredictedposepub.publish(kalmanpredpose_array)
 
-    callbackactive=False
+    kalman_pose_pub.publish(kalmanpose_array)
+    kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
-def scan_callback(scan):
-    ptime=scan.header.stamp
-    kalmanpredpose_array=PoseIDArray()
-    kalmanpredpose_array.header= Header(stamp=ptime,frame_id='base_frame')
-    dummy_pred_pose=PoseID()
-    dummy_pred_pose.pose.position.x=0
-    dummy_pred_pose.pose.position.y=0
-    kalmanpredpose_array.poses.append(dummy_pred_pose)
-
-    if(not callbackactive):
-        kalmanpredictedposepub.publish(kalmanpredpose_array)
 
 def main():
-    global kalmanposepub,kalmanpredictedposepub,callbackactive
-    callbackactive=False
+    global kalman_pose_pub,kalman_predicted_pose_pub,people
+
+    #Initial Condition    
+
+    people=[]
+    
     rospy.init_node('Kalman_filter')
-    pose_sub = rospy.Subscriber('/Measurements', PoseIDArray, callback)
-    scan_sub=rospy.Subscriber('/scan', LaserScan, scan_callback)
+    measurement_sub = rospy.Subscriber('/Measurements', PoseIDArray, callback)
 
-    kalmanposepub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=20)
+    kalman_pose_pub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=10)
 
-    kalmanpredictedposepub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=20)
-    kalmanpredpose_array=PoseIDArray()
-
-
-    # while not rospy.is_shutdown():
-    #     if(not callbackactive):
-    #         #rospy.loginfo("Publishing predicted poses as callback not active:")
-    #         kalmanpredpose_array.header= Header(stamp=rospy.Time.now(),frame_id='base_frame')
-    #         time.sleep(5)
-    #         kalmanpredictedposepub.publish(kalmanpredpose_array)
+    kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=10)
+    
 
     rospy.spin()
 
@@ -402,10 +309,3 @@ def main():
 if __name__ == '__main__':
     main()
 
-#make it publish the predicted positions
-
-#say one person is being tracked. but no longer getting measurements. a new measurement comes from different person.
-# in hungarian node, the prediction of the person that was being tracked and the new measurement gets mapped. If new measurement 
-    #had come with the measurement of the old person being 
-    #tracked it would nt be an issue. But now the new measurement is assignned to person already being tracked.
-    #Maybe I should set a threshold, within hungarian node to perform mapping

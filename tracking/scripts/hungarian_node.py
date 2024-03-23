@@ -35,11 +35,22 @@ def cost_matrix(poses1,poses2):
     return cost_mat
 
 
-def callback_filtered_laser(filter_poses):
+def callback_filtered_laser(filtered_pose_array):
 
-    print("Filtered poses time:")
-    
-    print(filter_poses.header.stamp)
+    global firsttime
+    if(not firsttime):
+        ided_pose_array=PoseIDArray()
+        ided_pose_array.header.stamp=filtered_pose_array.header.stamp
+        for j in filtered_pose_array.poses:
+            ided_pose=PoseID()
+            ided_pose.pose.position.x=j.position.x
+            ided_pose.pose.position.y=j.position.y
+            ided_pose.ID=0
+
+            ided_pose_array.poses.append(ided_pose)
+
+        measurepub.publish(ided_pose_array)
+
 
     # lidar_measurements=[]
     # selected_lidar=[]
@@ -81,90 +92,78 @@ def callback_predicted(poses):
     #     ids.append(i.ID)
     
 
-def callback(filter_poses,predicted_poses):
+def callback(filtered_pose_array,predicted_pose_array):
 
     print("Entered callback")
+    global firsttime
+    firsttime=True     #When there are no predictions coming this should be made to false again
 
     #Predicted poses part
-    predictions=[]
+    predicted_xy_list=[]
     ids=[]
 
-    for i in predicted_poses.poses:
-        predictions.append([i.pose.position.x,i.pose.position.y])
+    for i in predicted_pose_array.poses:
+        predicted_xy_list.append([i.pose.position.x,i.pose.position.y])
         ids.append(i.ID)
 
     #Filtered poses part
-        
-    
-    lidar_measurements=[]
-    selected_lidar=[]
-    final_ptime=filter_poses.header.stamp
-    FinalMeasurements=PoseIDArray()
-    FinalMeasurements.header= Header(stamp=final_ptime,frame_id='base_frame')
-    for i in filter_poses.poses:
-        lidar_measurements.append([i.position.x,i.position.y])
+    filtered_xy_list=[]
+    selected_xy_list=[]
+    #final_ptime=filter_poses.header.stamp
+    ided_pose_array=PoseIDArray()
+    ided_pose_array.header.stamp=filtered_pose_array.header.stamp
+    ided_pose_array.header.frame_id=ided_pose_array.header.frame_id
+
+    for i in filtered_pose_array.poses:
+        filtered_xy_list.append([i.position.x,i.position.y])
 
     
-    cost=cost_matrix(lidar_measurements,predictions)
+    cost=cost_matrix(filtered_xy_list,predicted_xy_list)
 
     #Solve the assignment problem
     row_indices, col_indices = linear_sum_assignment(cost)
 
-    # # Extract the optimal assignment
+    #Extract the optimal assignment
     assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
 
-
-    #Handle case when we get extra measurements
-
     print("Optimal Assignment:")
-    #print(len(cam_poses))
-    #print(len(lidar_poses))
+
     for row, col in assignment:
-        print(f"Pose {lidar_measurements[row]} in poses1, assigned to poses {predictions[col]} in Poses2")
+        print(f"Pose {filtered_xy_list[row]} in poses1, assigned to poses {predicted_xy_list[col]} in Poses2")
         
-        if(np.linalg.norm(np.array(lidar_measurements[row])-np.array(predictions[col]))<=2):
-            selected_lidar.append(lidar_measurements[row])
+        if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=2):
+            selected_xy_list.append(filtered_xy_list[row])
 
-            FinalMeasurement=PoseID()
-            FinalMeasurement.pose.position.x=lidar_measurements[row][0]
-            FinalMeasurement.pose.position.y=lidar_measurements[row][1]
-            FinalMeasurement.ID=ids[col]
+            ided_pose=PoseID()
+            ided_pose.pose.position.x=filtered_xy_list[row][0]
+            ided_pose.pose.position.y=filtered_xy_list[row][1]
+            ided_pose.ID=ids[col]
 
-            FinalMeasurements.poses.append(FinalMeasurement)
+            ided_pose_array.poses.append(ided_pose)
         
 
-    for k in selected_lidar:
-        if(k in lidar_measurements):
-            lidar_measurements.remove(k)
+    for k in selected_xy_list:
+        if(k in filtered_xy_list):
+            filtered_xy_list.remove(k)
             print("Got removed:",k)
 
-    print(predictions)
-    if(not (predictions[0][0]==0 and predictions[0][1]==0)):
-        for j in lidar_measurements:
-            FinalMeasurement=PoseID()
-            FinalMeasurement.pose.position.x=j[0]
-            FinalMeasurement.pose.position.y=j[1]
-            FinalMeasurement.ID=0
+    for j in filtered_xy_list:
+        ided_pose=PoseID()
+        ided_pose.pose.position.x=j[0]
+        ided_pose.pose.position.y=j[1]
+        ided_pose.ID=0
 
-            FinalMeasurements.poses.append(FinalMeasurement)
-    else:
-        print('Simply dummies')
-        #Popping those which got appended in optimal assignment
-        for i in FinalMeasurements.poses:
-            FinalMeasurements.poses.pop()
-        print(FinalMeasurements.poses)
+        ided_pose_array.poses.append(ided_pose)
 
-    measurepub.publish(FinalMeasurements)
+    measurepub.publish(ided_pose_array)
         
-    
 def main():
 
-    global measurepub,visualpub,firsttime
+    global measurepub,firsttime
     rospy.init_node('Hungarian_Algorithm')
-    firsttime=True
+    firsttime=False
     
-
-    # pose_filtered_sub=rospy.Subscriber('/PoseFilteredLaser',PoseArray,callback_filtered_laser)
+    pose_filtered_sub=rospy.Subscriber('/PoseFilteredLaser',PoseArray,callback_filtered_laser)
 
     # pose_predictions_sub=rospy.Subscriber('/PredictedPoses',PoseIDArray,callback_predicted)
 
@@ -173,17 +172,12 @@ def main():
 
     #Debug this by checking if its actaully the problem with time sychronisaer. echo the above topics
 
-    ts = message_filters.ApproximateTimeSynchronizer([pose_filtered_sub,pose_predictions_sub], 10, 13) #try varying time diff
-
+    ts = message_filters.ApproximateTimeSynchronizer([pose_filtered_sub,pose_predictions_sub], 10, 1) #try varying time diff
 
     ts.registerCallback(callback)
 
-
     measurepub=rospy.Publisher('/Measurements',PoseIDArray,queue_size=10)
 
-    # visualpub=rospy.Publisher('/Pose',Pose,queue_size=10)
-
-    
     rospy.spin()
         
   

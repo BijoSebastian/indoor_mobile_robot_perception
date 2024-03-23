@@ -5,7 +5,6 @@ import pandas as pd
 from sklearn.cluster import DBSCAN
 import seaborn as sns
 import matplotlib.pyplot as plt
-import time
 import cv2
 
 
@@ -41,8 +40,6 @@ def avg_cluster(clusters):
         # Fit a circle using minEnclosingCircle
         #center, radius = cv2.minEnclosingCircle(polar_cluster)
 
-        print('avgx',avg_x)
-
         avgs.append([avg_x,avg_y])
 
     return avgs
@@ -55,13 +52,6 @@ def fit_clusters_into_circles(clusters):
         if len(cluster) < 3:
             # At least 3 points are needed to fit a circle
             continue
-
-        # Convert the cluster from rectangular to polar coordinates
-        # polar_cluster = []
-        # for point in cluster:
-        #     r = math.sqrt(point[0]**2 + point[1]**2)
-        #     theta = math.atan2(point[1], point[0])
-        #     polar_cluster.append([r, theta])
 
         # # Convert polar coordinates to numpy array
         polar_cluster = np.array(cluster,dtype=np.float32)
@@ -125,10 +115,20 @@ def visualization_point(center):
 
 def callback(msg):
     # Getting the polar coordinates of the point cloud
-    global pose
+    global pose,first_time,t0
 
-    
-    ptime=msg.header.stamp
+    #Time handling
+    if(first_time==True):
+        t0=msg.header.stamp.to_nsec()*(10**(-9))
+        first_time=False
+
+    ptime_stamp=msg.header.stamp
+    t_now=ptime_stamp.to_nsec()*(10**(-9))
+    time_now=t_now-t0
+    print("The time now:",time_now)
+    before_clustering_time=rospy.Time.now()
+    before_clustering_time_sec=before_clustering_time.to_nsec()*(10**(-9))
+
     pts_r = np.array(msg.ranges)
     delfi = msg.angle_increment
     pts_ang = np.arange(start=msg.angle_min, stop=msg.angle_max, step=delfi)
@@ -162,8 +162,8 @@ def callback(msg):
 
         outliers = DBSCAN_dataset[DBSCAN_dataset['Cluster']==-1]
 
-        print("No. of clusters:")
-        print(DBSCAN_dataset.Cluster.unique().size)
+        # print("No. of clusters:")
+        # print(DBSCAN_dataset.Cluster.unique().size)
         cluster=DBSCAN_dataset[DBSCAN_dataset['Cluster']==0]
         
         clusters = []
@@ -174,8 +174,6 @@ def callback(msg):
                 continue
             cluster = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
             clusters.append(cluster[['x', 'y']].values)
-
-        print(cluster)
 
         #Fit clusters into circles
         try:
@@ -191,17 +189,16 @@ def callback(msg):
             #     print("Person Detected!!")
             #     people.append(p)
             people.append(p)
-        print(people)
         lidar_poses=PoseArray()
 
         #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
-        lidar_poses.header = Header(stamp=ptime, frame_id="base_frame")
+        lidar_poses.header = Header(stamp=ptime_stamp, frame_id="base_frame")
 
         
         for k in people:
             lidar_pose=Pose()
             #lidar_pose.header = Header(stamp=rospy.Time.now(), frame_id="base_frame")
-            lidar_pose.position.z,lidar_pose.position.x=k#list(k[0])
+            lidar_pose.position.x,lidar_pose.position.y=k#list(k[0])
 
             lidar_poses.poses.append(lidar_pose)
 
@@ -263,12 +260,10 @@ def callback(msg):
         #pose_lidar_pub.publish(lidar_poses)
 
         # posepub.publish(pose)
-
-
-    
-
-    #print(DBSCAN_dataset)
-    
+    after_clustering_time=rospy.Time.now()
+    after_clustering_time_sec=after_clustering_time.to_nsec()*(10**(-9))
+    time_elapse=after_clustering_time_sec-before_clustering_time_sec
+    print("Time taken for clustering:",time_elapse)
     pose_lidar_pub.publish(lidar_poses)
 
     
@@ -276,21 +271,15 @@ def callback(msg):
 
 def main():
 
-    global visualpub,pose_lidar_pub#posepub,
+    global visualpub,pose_lidar_pub,first_time
+    first_time=True
     rospy.init_node('DBSCAN_Clustering')
     
     sub = rospy.Subscriber('/scan', LaserScan, callback)
 
     pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=10)
 
-    #posepub=rospy.Publisher('/Pose',Pose,queue_size=10)
-
-    visualpub=rospy.Publisher('/visualpose',Marker,queue_size=10)
-
-    '''while(not rospy.is_shutdown()):
-        
-        posepub.publish(pose)
-        #visualpub.publish(marker)'''
+    #visualpub=rospy.Publisher('/visualpose',Marker,queue_size=10)
     
     rospy.spin()
         

@@ -8,7 +8,7 @@
         <param name="config_file" value="$(find camera_2d_lidar_calibration)/config/config.yaml" />
         <param name="laser_point_radius" type="int" value="3" />    <!-- Reprojected laser point radius size in pixels -->
         <param name="detection_point_radius" type="int" value="7" />
-        <param name="time_diff" type="double" value="13" />  <!-- Maximum time difference in seconds between image and laser scan to be registered and processed -->
+        <param name="time_diff" type="double" value="0.5" />  <!-- Maximum time difference in seconds between image and laser scan to be registered and processed -->
     </node>
 
     <node name="rviz" type="rviz" pkg="rviz" args="-d $(find camera_2d_lidar_calibration)/rviz/reprojection.rviz"/>
