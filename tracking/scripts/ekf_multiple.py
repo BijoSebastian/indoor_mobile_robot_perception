@@ -45,6 +45,7 @@ class person:
             [0,1,0,0,0],
             [0,0,1,0,0]])
     #R matrix for noise associated with measurement
+    #Originally
     R=np.array([[0.1,0,0],
             [0,0.1,0],
             [0,0,50]])
@@ -224,6 +225,7 @@ def callback(msg):
         meas=i[1:3]
         for j in people:
             if(i[0]==j.id):
+                #plt.scatter(i[1],i[2],color='red')
                 print("UPDATING POSE OF ",j.id)
                 meas_new=(j).heading_angle(meas)
                 (j).measurement_update(meas_new)
@@ -263,7 +265,7 @@ def callback(msg):
         if(k.id not in [row[0] for row in pose_list]):
             k.iterations+=1
             
-        if(k.id not in [row[0] for row in pose_list] and k.iterations>20):#add and time_elapse<10
+        if(k.id not in [row[0] for row in pose_list] and k.iterations>10):#add and time_elapse<10
             print('Deleted ID number:',k.id)
             people.pop(index)
 

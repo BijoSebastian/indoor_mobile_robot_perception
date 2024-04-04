@@ -13,9 +13,6 @@ from scipy.optimize import linear_sum_assignment
 from tracking.msg import PoseID,PoseIDArray
 
 
-#predictions=[]
-
-
 def cost_matrix(poses1,poses2):
 
     cost_mat=np.empty([len(poses1),len(poses2)])
@@ -52,44 +49,18 @@ def callback_filtered_laser(filtered_pose_array):
         measurepub.publish(ided_pose_array)
 
 
-    # lidar_measurements=[]
-    # selected_lidar=[]
-    # final_ptime=filter_poses.header.stamp
-    # FinalMeasurements=PoseIDArray()
-    # FinalMeasurements.header= Header(stamp=final_ptime,frame_id='base_frame')
-    # for i in filter_poses.poses:
-    #     lidar_measurements.append([i.position.x,i.position.y])
+# def callback_predicted(poses):
 
-    
+#     print("Predicted poses time:")
+#     print(poses.header.stamp)
 
-    # for j in lidar_measurements:
-    #     FinalMeasurement=PoseID()
-    #     FinalMeasurement.pose.position.x=j[0]
-    #     FinalMeasurement.pose.position.y=j[1]
-    #     FinalMeasurement.ID=0
+#     # global predictions,ids
+#     # predictions=[]
+#     # ids=[]
 
-    #     FinalMeasurements.poses.append(FinalMeasurement)
-
-    # measurepub.publish(FinalMeasurements)
-    # firsttime=False
-
-
-    
-
-    
-
-def callback_predicted(poses):
-
-    print("Predicted poses time:")
-    print(poses.header.stamp)
-
-    # global predictions,ids
-    # predictions=[]
-    # ids=[]
-
-    # for i in poses.poses:
-    #     predictions.append([i.pose.position.x,i.pose.position.y])
-    #     ids.append(i.ID)
+#     # for i in poses.poses:
+#     #     predictions.append([i.pose.position.x,i.pose.position.y])
+#     #     ids.append(i.ID)
     
 
 def callback(filtered_pose_array,predicted_pose_array):
@@ -131,15 +102,15 @@ def callback(filtered_pose_array,predicted_pose_array):
     for row, col in assignment:
         print(f"Pose {filtered_xy_list[row]} in poses1, assigned to poses {predicted_xy_list[col]} in Poses2")
         
-        if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=2):
-            selected_xy_list.append(filtered_xy_list[row])
+        #if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=2):
+        selected_xy_list.append(filtered_xy_list[row])
 
-            ided_pose=PoseID()
-            ided_pose.pose.position.x=filtered_xy_list[row][0]
-            ided_pose.pose.position.y=filtered_xy_list[row][1]
-            ided_pose.ID=ids[col]
+        ided_pose=PoseID()
+        ided_pose.pose.position.x=filtered_xy_list[row][0]
+        ided_pose.pose.position.y=filtered_xy_list[row][1]
+        ided_pose.ID=ids[col]
 
-            ided_pose_array.poses.append(ided_pose)
+        ided_pose_array.poses.append(ided_pose)
         
 
     for k in selected_xy_list:

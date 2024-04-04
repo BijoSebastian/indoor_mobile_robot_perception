@@ -4,7 +4,12 @@ import rospy
 import pandas as pd
 from sklearn.cluster import DBSCAN
 import seaborn as sns
+import matplotlib
+matplotlib.use('TkAgg')  # Use the TkAgg backend (or another suitable backend)
+
 import matplotlib.pyplot as plt
+
+from matplotlib.patches import Circle
 import cv2
 
 
@@ -25,6 +30,7 @@ from std_msgs.msg import Header
 # Global Variables
 marker = Marker()
 scan = LaserScan()
+
 
 def avg_cluster(clusters):
     avgs=[]
@@ -115,7 +121,7 @@ def visualization_point(center):
 
 def callback(msg):
     # Getting the polar coordinates of the point cloud
-    global pose,first_time,t0
+    global pose,first_time,t0,firstplottime,ax,fig
 
     #Time handling
     if(first_time==True):
@@ -177,18 +183,19 @@ def callback(msg):
 
         #Fit clusters into circles
         try:
-            #fitted_circles = fit_clusters_into_circles(clusters) #It ll say some serialization error
-            fitted_circles=avg_cluster(clusters) #remove later
+            fitted_circles = fit_clusters_into_circles(clusters) #It ll say some serialization error
+            #fitted_circles=avg_cluster(clusters) #remove later
         except:
             print("There is error")
 
         people=[]
         for p in fitted_circles:
-            # print(p[1])
-            # if(p[1]<4 and p[1]>0.01):
-            #     print("Person Detected!!")
-            #     people.append(p)
-            people.append(p)
+            
+            if(p[1]<4 and p[1]>0.01):
+                print("Person Detected!!")
+                print('Person coordinates:',p[0])
+                people.append(list(p[0]))
+            #people.append(p)
         lidar_poses=PoseArray()
 
         #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
@@ -202,31 +209,35 @@ def callback(msg):
 
             lidar_poses.poses.append(lidar_pose)
 
+        if(firstplottime):
+            fig, ax = plt.subplots()
+            firstplottime=False
 
-        # sns.scatterplot(x='x', y='y',
 
-        #         data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
+        sns.scatterplot(x='x', y='y',
 
-        #         hue='Cluster', palette='Set2', legend='full', s=10)
+                data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
+
+                hue='Cluster', palette='Set2', legend='full', s=10)
     
     
 
     
-    
-        # plt.plot(0,0,'o')
-    
-        # plt.xlim(-10,10)
-        # plt.ylim(-10,10)
-    
-        
+        plt.plot(0,0,'o')
 
-        #print(cluster)
+        for i in fitted_circles:
+            circle = Circle(list(i[0]), i[1],fill=False)
+            plt.gca().add_patch(circle)
+            
     
-        # plt.show(block=False)
+        ax.set_xlim(-10,10)
+        ax.set_ylim(-10,10)
+    
+        plt.show(block=False)
 
-        # plt.pause(0.00000000001)
-
-        # plt.clf()
+        plt.pause(0.001)
+        plt.clf()
+        plt.close(fig)
 
         #print(lidar_poses)
 
@@ -256,6 +267,7 @@ def callback(msg):
 
         lidar_poses.poses=[]
         print(error)
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
         #pose_lidar_pub.publish(lidar_poses)
 
@@ -271,13 +283,18 @@ def callback(msg):
 
 def main():
 
-    global visualpub,pose_lidar_pub,first_time
+    global visualpub,pose_lidar_pub,first_time,firstplottime
     first_time=True
+    firstplottime=True
     rospy.init_node('DBSCAN_Clustering')
     
     sub = rospy.Subscriber('/scan', LaserScan, callback)
 
     pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=10)
+
+    
+
+    
 
     #visualpub=rospy.Publisher('/visualpose',Marker,queue_size=10)
     

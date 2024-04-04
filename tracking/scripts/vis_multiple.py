@@ -70,23 +70,20 @@ kalmanpath = []
 def visualization_markers(posearray,publisher):
 
     #Object as sphere
-    # print(center)
-    print('hi')
     markerarray=MarkerArray()
+
     tempmarker=Marker()
     
     tempmarker.header.frame_id = "map"
     tempmarker.type = Marker.SPHERE
 
-    
-    
     tempmarker.scale.x = 0.1
     tempmarker.scale.y = 0.1
     tempmarker.scale.z = 0.1
 
     for i in posearray.poses:
         
-        tempmarker.header.stamp = rospy.Time.now()
+        tempmarker.header.stamp = posearray.header.stamp
         
         tempmarker.action = Marker.ADD
         tempmarker.id = i.ID
@@ -101,16 +98,13 @@ def visualization_markers(posearray,publisher):
 
         markerarray.markers.append(tempmarker)
 
-
-    print("THE MARKERS:",markerarray)
-
     publisher.publish(markerarray)
     
 
 def kalman_callback(pose_array):
 
-    print("Pose array:",pose_array)
     visualization_markers(pose_array,kalman_markerarray_pub)
+    pose_array.poses[0].header.stamp=pose_array.header.stamp
     kalman_pathmaker(pose_array.poses[0],kalman_path1,kalman_path_pub1)
     #kalman_pathmaker(pose_array.poses[1],kalman_path2,kalman_path_pub2)
 
@@ -118,12 +112,9 @@ def kalman_pathmaker(pose,kalman_path,kalman_path_pub):
 
     x = pose.pose.position.x
     y = pose.pose.position.y
-
-    print("Kalman pose:",pose)
-
           
-    kalman_path.header.frame_id="laser"
-    kalman_path.header.stamp=rospy.Time.now()
+    kalman_path.header.frame_id="map"
+    kalman_path.header.stamp=pose.header.stamp
     pose_current = PoseStamped()
     pose_current.pose.position.x = x
     pose_current.pose.position.y = y
@@ -134,13 +125,11 @@ def kalman_pathmaker(pose,kalman_path,kalman_path_pub):
 
 
 
-def measured_callback(pose_array):
+# def measured_callback(pose_array):
 
-    # measured_pathmaker(pose_array.poses[0],measured_path1,measured_path_pub1)
-    # measured_pathmaker(pose_array.poses[1],measured_path2,measured_path_pub2)
-
-    print(' ')
-    #visualization_markers(pose_array,measured_markerarray_pub)
+#     # measured_pathmaker(pose_array.poses[0],measured_path1,measured_path_pub1)
+#     # measured_pathmaker(pose_array.poses[1],measured_path2,measured_path_pub2)
+#     #visualization_markers(pose_array,measured_markerarray_pub)
 
 def measured_pathmaker(pose,measured_path,measured_path_pub):
 
@@ -163,10 +152,11 @@ def measured_pathmaker(pose,measured_path,measured_path_pub):
 def main():
     global kalman_path_pub1,kalman_path_pub2,measured_path_pub1,measured_path_pub2,measured_markerarray_pub,kalman_markerarray_pub
     rospy.init_node('Visualisation_Node')
+    print('Visualisation started')
 
     kalman_pose_sub = rospy.Subscriber('/kalmanposeArray',PoseIDArray,kalman_callback)
 
-    measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
+    #measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
 
     kalman_path_pub1=rospy.Publisher('/kalman_path1',Path,queue_size=20)
     kalman_path_pub2=rospy.Publisher('/kalman_path2',Path,queue_size=20)
