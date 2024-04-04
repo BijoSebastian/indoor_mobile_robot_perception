@@ -23,6 +23,7 @@ from nav_msgs.msg import Path
 from geometry_msgs.msg import Pose,PoseArray
 
 from std_msgs.msg import Header
+from scipy.optimize import least_squares
 
 #Maybe later we could use Pose stamped
 
@@ -31,6 +32,41 @@ from std_msgs.msg import Header
 marker = Marker()
 scan = LaserScan()
 
+def circle_residuals(params, x, y):
+    h, k, r = params
+    return np.sqrt((x - h)**2 + (y - k)**2) - r
+
+def fit_circle(x, y):
+    
+    h_guess = np.mean(x)  # Mean of x coordinates
+    k_guess = np.mean(y)  # Mean of y coordinates
+    r_guess = np.max(np.sqrt((x - h_guess)**2 + (y - k_guess)**2))  # Max distance from center
+    initial_guess = [h_guess, k_guess, r_guess]
+    # initial_guess = [0, 0, 1]  # Initial guess for (h, k, r)
+    result = least_squares(circle_residuals, initial_guess, args=(x, y))
+    h, k, r = result.x
+    return [h, k], r
+
+def fit_clusters_into_circles2(clusters):
+    fitted_circles = []
+
+    for cluster in clusters:
+        if len(cluster) < 3:
+            # At least 3 points are needed to fit a circle
+            continue
+
+        # # Convert polar coordinates to numpy array
+        rect_cluster = np.array(cluster,dtype=np.float32)
+
+        x=rect_cluster[:,0]
+        y=rect_cluster[:,1]
+
+        # Fit a circle using minEnclosingCircle
+        center, radius = fit_circle(x,y)
+
+        fitted_circles.append([center,radius])
+
+    return fitted_circles
 
 def avg_cluster(clusters):
     avgs=[]
@@ -180,10 +216,11 @@ def callback(msg):
                 continue
             cluster = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
             clusters.append(cluster[['x', 'y']].values)
+            print(clusters)
 
         #Fit clusters into circles
         try:
-            fitted_circles = fit_clusters_into_circles(clusters) #It ll say some serialization error
+            fitted_circles = fit_clusters_into_circles2(clusters) #It ll say some serialization error
             #fitted_circles=avg_cluster(clusters) #remove later
         except:
             print("There is error")
@@ -214,11 +251,18 @@ def callback(msg):
             firstplottime=False
 
 
+        # sns.scatterplot(x='x', y='y',
+
+        #         data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
+
+        #         hue='Cluster', palette='Set2', legend='full', s=10)
+        
+        #Without legend
         sns.scatterplot(x='x', y='y',
 
                 data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
 
-                hue='Cluster', palette='Set2', legend='full', s=10)
+                hue='Cluster', s=10)
     
     
 
