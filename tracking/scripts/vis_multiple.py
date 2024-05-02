@@ -2,6 +2,8 @@
 
 import rospy
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')  # Use the TkAgg backend (or another suitable backend)
 import matplotlib.pyplot as plt
 import math
 
@@ -17,6 +19,9 @@ kalman_path2=Path()
 
 measured_path1=Path()
 measured_path2=Path()
+
+measured_trajectories = {}
+kalman_trajectories = {}
 
 
 
@@ -67,6 +72,69 @@ kalmanpath = []
 
     cv2.waitKey(0)'''
 
+def pose_to_position(pose):
+    """
+    Convert PoseArray message to a list of (x, y) positions.
+    """
+    return (pose.pose.position.x, pose.pose.position.y)
+
+def update_trajectory(trajectory_dict, person_id, position):
+    """
+    Update trajectory of a specific person in the dictionary.
+    """
+    if person_id not in trajectory_dict:
+        trajectory_dict[person_id] = []
+    trajectory_dict[person_id].append(position)
+
+def plot_trajectories():
+    """
+    Plot trajectories of all persons.
+    """
+    #plt.figure()
+    color_cycle = plt.cm.tab10.colors
+    num_persons = len(measured_trajectories)
+    num_rows = math.ceil(num_persons / 2)  # Adjust the number of rows based on the number of persons
+    fig, axes = plt.subplots(num_rows, 2, figsize=(12, 6 * num_rows))  # Create subplots
+    axes = axes.flatten()
+    #for person_id, measured_traj in measured_trajectories.items():
+    for idx, (person_id, measured_traj) in enumerate(measured_trajectories.items()):
+        print(person_id)
+        print(kalman_trajectories)
+        kalman_traj = kalman_trajectories.get(person_id, [])
+        if(len(kalman_traj)==0):
+            continue
+        measured_color = color_cycle[idx % len(color_cycle)]  # Cycle through colors for different persons
+        kalman_color = color_cycle[(idx + 1) % len(color_cycle)]
+        ax = axes[idx]
+        x, y = zip(*measured_traj)
+        ax.plot(x, y, label=f'Person {person_id} (Measured)', color=measured_color)
+        x, y = zip(*kalman_traj)
+        ax.plot(x, y, label=f'Person {person_id} (Kalman)', color=kalman_color, linestyle='dashed')
+        #plt.plot(x, y, label=f'Person {person_id} (Measured)', color='blue')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_title(f'Trajectories of Person {person_id}')
+        ax.legend()
+        ax.grid(True)
+        #plt.plot(x, y, label=f'Person {person_id} (Kalman)', color='red', linestyle='dashed')
+        ax.plot(0,0,'o')
+
+    plt.tight_layout()
+    # plt.xlabel('X')
+    # plt.ylabel('Y')
+    # plt.title('Trajectories of Persons')
+    # plt.legend()
+    #plt.grid(True)
+    #plt.savefig('person_path.png')
+    
+    plt.show()
+    plt.pause(10)
+
+    # plt.pause(0.001)
+    # plt.clf()
+    # plt.close()
+    #plt.show()
+
 def visualization_markers(posearray,publisher):
 
     #Object as sphere
@@ -102,34 +170,45 @@ def visualization_markers(posearray,publisher):
     
 
 def kalman_callback(pose_array):
-
     visualization_markers(pose_array,kalman_markerarray_pub)
-    pose_array.poses[0].header.stamp=pose_array.header.stamp
-    kalman_pathmaker(pose_array.poses[0],kalman_path1,kalman_path_pub1)
+    try:
+        pose_array.poses[0].header.stamp=pose_array.header.stamp
+    except Exception as err:
+        print("ERROR in visualization pose array header assignment:")
+        print(err)
+    for pose in pose_array.poses:
+        position = pose_to_position(pose)
+        update_trajectory(kalman_trajectories, pose.ID, position)
+    #plot_trajectories()
+    #kalman_pathmaker(pose_array.poses[0],kalman_path1,kalman_path_pub1)
     #kalman_pathmaker(pose_array.poses[1],kalman_path2,kalman_path_pub2)
 
-def kalman_pathmaker(pose,kalman_path,kalman_path_pub):
+# def kalman_pathmaker(pose,kalman_path,kalman_path_pub):
 
-    x = pose.pose.position.x
-    y = pose.pose.position.y
+#     x = pose.pose.position.x
+#     y = pose.pose.position.y
           
-    kalman_path.header.frame_id="map"
-    kalman_path.header.stamp=pose.header.stamp
-    pose_current = PoseStamped()
-    pose_current.pose.position.x = x
-    pose_current.pose.position.y = y
-    pose_current.pose.position.z = 0
-    kalman_path.poses.append(pose_current)
+#     kalman_path.header.frame_id="map"
+#     kalman_path.header.stamp=pose.header.stamp
+#     pose_current = PoseStamped()
+#     pose_current.pose.position.x = x
+#     pose_current.pose.position.y = y
+#     pose_current.pose.position.z = 0
+#     kalman_path.poses.append(pose_current)
 
-    kalman_path_pub.publish(kalman_path)
+#     kalman_path_pub.publish(kalman_path)
 
 
 
-# def measured_callback(pose_array):
-
-#     # measured_pathmaker(pose_array.poses[0],measured_path1,measured_path_pub1)
-#     # measured_pathmaker(pose_array.poses[1],measured_path2,measured_path_pub2)
-#     #visualization_markers(pose_array,measured_markerarray_pub)
+def measured_callback(pose_array):
+    # measured_pathmaker(pose_array.poses[0],measured_path1,measured_path_pub1)
+    # measured_pathmaker(pose_array.poses[1],measured_path2,measured_path_pub2)
+    visualization_markers(pose_array,measured_markerarray_pub)
+    for pose in pose_array.poses:
+        position = pose_to_position(pose)
+        update_trajectory(measured_trajectories, pose.ID, position)
+    #plot_trajectories()
+    
 
 def measured_pathmaker(pose,measured_path,measured_path_pub):
 
@@ -156,7 +235,7 @@ def main():
 
     kalman_pose_sub = rospy.Subscriber('/kalmanposeArray',PoseIDArray,kalman_callback)
 
-    #measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
+    measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
 
     kalman_path_pub1=rospy.Publisher('/kalman_path1',Path,queue_size=20)
     kalman_path_pub2=rospy.Publisher('/kalman_path2',Path,queue_size=20)
@@ -166,6 +245,8 @@ def main():
 
     measured_markerarray_pub=rospy.Publisher('/measured_markers',MarkerArray,queue_size=20)
     kalman_markerarray_pub=rospy.Publisher('/kalman_markers',MarkerArray,queue_size=20)
+
+    rospy.on_shutdown(plot_trajectories)
 
     #rospy.on_shutdown(shutdown)
     rospy.spin()

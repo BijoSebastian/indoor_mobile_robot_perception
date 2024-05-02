@@ -46,9 +46,14 @@ class person:
             [0,0,1,0,0]])
     #R matrix for noise associated with measurement
     #Originally
-    R=np.array([[0.1,0,0],
-            [0,0.1,0],
-            [0,0,50]])
+    # R=np.array([[0.1,0,0],
+    #         [0,0.1,0],
+    #         [0,0,50]])
+    
+    R=np.array([[0.1*(10**6),0,0],
+            [0,0.1*(10**6),0],
+            [0,0,50*(10**6)]])
+    
     #Identity matrix
     I=np.identity(5)
     #Last id
@@ -191,7 +196,9 @@ class person:
         s=np.matmul(np.matmul(person.H,self.P),((person.H).transpose()))+person.R
         k=np.matmul(np.matmul(self.P,(person.H.transpose())),(np.linalg.inv(s)))
         self.Xc=self.Xc+np.matmul(k,y)
-        p_updated=np.matmul((person.I-np.matmul(k,person.H)),self.P)
+        print('Addition to Xc:',np.matmul(k,y))
+        #p_updated=np.matmul((person.I-np.matmul(k,person.H)),self.P)
+        self.P=np.matmul((person.I-np.matmul(k,person.H)),self.P)
         self.iterations=0
 
 
@@ -221,6 +228,8 @@ def callback(msg):
         pose=[t.ID,t.pose.position.x,t.pose.position.y]
         pose_list.append(pose)
 
+    print(pose_list)
+
     for i in pose_list:
         meas=i[1:3]
         for j in people:
@@ -229,6 +238,8 @@ def callback(msg):
                 print("UPDATING POSE OF ",j.id)
                 meas_new=(j).heading_angle(meas)
                 (j).measurement_update(meas_new)
+                print('ID:',j.id)
+                print('Xc:',j.Xc)
                 break
         if(i[0]==0 or i[0]!=j.id):
             print("NEW CREATED")
@@ -279,7 +290,10 @@ def callback(msg):
         kalmanpose_array.poses.append(kalmanpose)
 
     for i in people:
+        print("PREDICTING...")
         i.prediction()
+        print('ID:',i.id)
+        print('Xc:',i.Xc)
         predpose=PoseID()
         predpose.ID=i.id
         predpose.pose.position.x=i.Xc[0][0]

@@ -181,7 +181,7 @@ def callback(msg):
     newscan_rect = []  #Contains point cloud in rectangular coordinates
     newscan_polar=[] #Contains point cloud in polar coordinates
     for r, ang in zip(pts_r_list, pts_ang_list):
-        if ((not np.isinf(r))): #and (abs(r)<2)):#Constraining scan to 1 radius circle 'and abs(r)<1'
+        if ((not np.isinf(r))) and (abs(r)<5):#Constraining scan to 1 radius circle 'and abs(r)<1'
             newscan_polar.append([r,ang])
             newscan_rect.append(polartorect([r, ang]))
 
@@ -216,7 +216,6 @@ def callback(msg):
                 continue
             cluster = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
             clusters.append(cluster[['x', 'y']].values)
-            print(clusters)
 
         #Fit clusters into circles
         try:
@@ -228,7 +227,7 @@ def callback(msg):
         people=[]
         for p in fitted_circles:
             
-            if(p[1]<4 and p[1]>0.01):
+            if(p[1]<0.2 and p[1]>0.01):
                 print("Person Detected!!")
                 print('Person coordinates:',p[0])
                 people.append(list(p[0]))
@@ -251,18 +250,11 @@ def callback(msg):
             firstplottime=False
 
 
-        # sns.scatterplot(x='x', y='y',
-
-        #         data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
-
-        #         hue='Cluster', palette='Set2', legend='full', s=10)
-        
-        #Without legend
         sns.scatterplot(x='x', y='y',
 
                 data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
 
-                hue='Cluster', s=10)
+                hue='Cluster', palette='Set2', legend='full', s=10)
     
     
 
