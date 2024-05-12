@@ -52,7 +52,7 @@ class person:
     
     R=np.array([[0.1*(10**6),0,0],
             [0,0.1*(10**6),0],
-            [0,0,50*(10**6)]])
+            [0,0,50*(10**8)]])
     
     #Identity matrix
     I=np.identity(5)

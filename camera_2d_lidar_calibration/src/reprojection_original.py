@@ -31,6 +31,12 @@ def callback(scan, image):
     diff = abs(image.header.stamp.to_nsec() - scan.header.stamp.to_nsec())
     rospy.loginfo("diff: %d ns" % diff)
     img = bridge.imgmsg_to_cv2(image)
+    img=np.array(img)
+    print(np.shape(img))
+    h=image.height
+    w=image.width
+    img_blank=np.zeros((h,w,3))
+    img=np.vstack((img,img_blank))
     cloud = lp.projectLaser(scan)
     points = pc2.read_points(cloud)
     #objPoints = np.array(map(extract, points))
@@ -48,7 +54,10 @@ def callback(scan, image):
             cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
         except OverflowError:
             continue
-    pub.publish(bridge.cv2_to_imgmsg(img))
+    
+    img_8bit = np.uint8(img)
+
+    pub.publish(bridge.cv2_to_imgmsg(img_8bit))
 
 rospy.init_node('reprojection')
 scan_topic = rospy.get_param("~scan_topic")

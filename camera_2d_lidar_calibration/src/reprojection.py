@@ -142,7 +142,7 @@ def Object_detection_yolo(img):
     for i in range(len(posearray.poses)):
         try:
             cv2.circle(img, (int(round(posearray.poses[i].position.x)),int(round(posearray.poses[i].position.y))), detection_point_radius, (255,0,0), -1)
-        except OverflowError:
+        except :
             continue
 
     return posearray,cam_detections
@@ -166,11 +166,18 @@ def extract_PoseArray(point):
     return x
 #Callback functions
 def callback(image,lidar_detections,scan):
+    print('Callback started!')
 
     before_callback_time=rospy.Time.now()
     before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
     
     img = bridge.imgmsg_to_cv2(image)
+    img=np.array(img)
+    h=image.height
+    w=image.width
+    img_blank=np.zeros((h,w,3))
+    img=np.vstack((img,img_blank))
+    img = np.uint8(img)
 
     #Scan part
     #The scan is projected on the image as green circles
@@ -195,7 +202,8 @@ def callback(image,lidar_detections,scan):
     for i in range(len(img_points)):
         try:
             cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
-        except OverflowError:
+        except Exception as err:
+            print('error:',err)
             continue
     
     #Image part
@@ -264,6 +272,8 @@ def callback(image,lidar_detections,scan):
         time_elapse=after_callback_time_sec-before_callback_time_sec
         print("Time taken for callback:",time_elapse)
         
+        
+
         filtered_laser_pub.publish(filtered_pose_array)
         pub.publish(bridge.cv2_to_imgmsg(img))
         detection_pub.publish(camposearray)

@@ -19,10 +19,17 @@ def callback(image):
     rotated_image = cv2.rotate(cv_image, cv2.ROTATE_180)
     mirrored_image = cv2.flip(rotated_image, 1)
     # Display the image using cv2.imshow()
-    cv2.imshow("CoppeliaSim Camera Image", mirrored_image)
-    cv2.waitKey(1)  # Wait for a short duration to allow OpenCV to display the image
+    # cv2.imshow("CoppeliaSim Camera Image", mirrored_image)
+    # cv2.waitKey(1)  # Wait for a short duration to allow OpenCV to display the image
 
-    ros_image=bridge.cv2_to_imgmsg(mirrored_image)  # Convert to BGR format for OpenCV
+    # Copy the timestamp from the input image message
+    timestamp = image.header.stamp
+
+    # Convert the mirrored image back to a ROS Image message
+    ros_image = bridge.cv2_to_imgmsg(mirrored_image, encoding="bgr8")  # Convert to BGR format for ROS
+
+    # Set the timestamp of the ROS Image message
+    ros_image.header.stamp = timestamp
 
     pub.publish(ros_image)
 
