@@ -181,7 +181,7 @@ def callback(msg):
     newscan_rect = []  #Contains point cloud in rectangular coordinates
     newscan_polar=[] #Contains point cloud in polar coordinates
     for r, ang in zip(pts_r_list, pts_ang_list):
-        if ((not np.isinf(r))): #and (abs(r)<5):#Constraining scan to 1 radius circle 'and abs(r)<1'
+        if ((not np.isinf(r))) and (abs(r)<4):#Constraining scan to 1 radius circle 'and abs(r)<1'
             newscan_polar.append([r,ang])
             newscan_rect.append(polartorect([r, ang]))
 

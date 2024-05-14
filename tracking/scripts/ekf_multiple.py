@@ -50,8 +50,8 @@ class person:
     #         [0,0.1,0],
     #         [0,0,50]])
     
-    R=np.array([[0.1*(10**6),0,0],
-            [0,0.1*(10**6),0],
+    R=np.array([[0.1*(10**4),0,0],
+            [0,0.1*(10**4),0],
             [0,0,50*(10**8)]])
     
     #Identity matrix
@@ -59,19 +59,21 @@ class person:
     #Last id
     last_id=1
 
-    def __init__(self,Xc,Xp,P,rev,id,iterations):
+    def __init__(self,Xc,Xp,P,rev,id,iterations,ptime):
         self.Xc=Xc
         self.Xp=Xp
         self.P=P
         self.rev=rev
         self.id=id
         self.iterations=iterations
+        self.ptime=ptime
+        self.ctime=ptime
 
     #Functions pertaining to the model of a person
 
     def heading_angle(self,meas):
         revmeas=self.rev
-        angle=coord_to_angle(meas[0],meas[1],self.Xc[0][0],self.Xc[1][0])
+        angle=coord_to_angle(self.Xc[0][0],self.Xc[1][0],meas[0],meas[1])
         prevangle=self.Xc[2][0]
         angle=(2*math.pi)*revmeas + angle
 
@@ -88,10 +90,11 @@ class person:
         self.rev=revmeas
         measnew=np.array([[meas[0]],
                         [meas[1]],
-                        [angle]])
+                        [angle],
+                        [meas[2]]])
         return measnew
 
-    def g(self):
+    def g(self,delt):
         #This is the state funciton
 
         xp=self.Xc[0][0]
@@ -101,9 +104,9 @@ class person:
         wp=self.Xc[4][0]
         
         #The state equations
-        xn=xp+(vp)*math.cos(thetap)
-        yn=yp+(vp)*math.sin(thetap)
-        thetan=(thetap+wp)
+        xn=xp+((vp)*math.cos(thetap)*delt)
+        yn=yp+((vp)*math.sin(thetap)*delt)
+        thetan=(thetap+(wp*delt))
         vn=vp
         wn=wp
 
@@ -125,7 +128,7 @@ class person:
         # self.Xp[3][0]=vp
         # self.Xp[4][0]=wp
     
-    def compute_G(self):
+    def compute_G(self,delt):
 
         x=self.Xc[0][0]
         y=self.Xc[1][0]
@@ -135,21 +138,21 @@ class person:
         
         g1x=1
         g1y=0
-        g1theta=-v*math.sin(theta)
-        g1v=math.cos(theta)
+        g1theta=-v*math.sin(theta)*delt
+        g1v=math.cos(theta)*delt
         g1w=0
 
         g2x=0
         g2y=1
-        g2theta=v*math.cos(theta)
-        g2v=math.sin(theta)
+        g2theta=v*math.cos(theta)*delt
+        g2v=math.sin(theta)*delt
         g2w=0
 
         g3x=0
         g3y=0
         g3theta=1
         g3v=0
-        g3w=1
+        g3w=delt
 
         g4x=0
         g4y=0
@@ -173,8 +176,9 @@ class person:
 
     def prediction(self):
     
-        x_pred,x_prev=person.g(self)
-        G=person.compute_G(self)
+        delt=self.ctime-self.ptime
+        x_pred,x_prev=person.g(self,delt)
+        G=person.compute_G(self,delt)
         p_pred=np.matmul(np.matmul(G,self.P),(G.transpose()))
 
 
@@ -192,7 +196,7 @@ class person:
 
     def measurement_update(self,meas):
     
-        y=meas-person.hfxn(self.Xc) #Convert to measurement domain
+        y=meas[0:3]-person.hfxn(self.Xc) #Convert to measurement domain
         s=np.matmul(np.matmul(person.H,self.P),((person.H).transpose()))+person.R
         k=np.matmul(np.matmul(self.P,(person.H.transpose())),(np.linalg.inv(s)))
         self.Xc=self.Xc+np.matmul(k,y)
@@ -200,6 +204,8 @@ class person:
         #p_updated=np.matmul((person.I-np.matmul(k,person.H)),self.P)
         self.P=np.matmul((person.I-np.matmul(k,person.H)),self.P)
         self.iterations=0
+        self.ptime=self.ctime
+        self.ctime=meas[3][0]
 
 
 
@@ -218,6 +224,9 @@ def callback(msg):
 
     present_time=msg.header.stamp
 
+    p_time_nsec=msg.header.stamp.to_nsec()
+    p_time_sec=p_time_nsec*(10**(-9))
+
     kalmanpose_array=PoseIDArray()
     kalmanpose_array.header= Header(stamp=present_time,frame_id='base_frame')
     kalmanpredpose_array=PoseIDArray()
@@ -225,13 +234,13 @@ def callback(msg):
     pose_list=[]
 
     for t in msg.poses:
-        pose=[t.ID,t.pose.position.x,t.pose.position.y]
+        pose=[t.ID,t.pose.position.x,t.pose.position.y,p_time_sec]
         pose_list.append(pose)
 
     print(pose_list)
 
     for i in pose_list:
-        meas=i[1:3]
+        meas=i[1:4]
         for j in people:
             if(i[0]==j.id):
                 #plt.scatter(i[1],i[2],color='red')
@@ -266,8 +275,9 @@ def callback(msg):
             id_new=person.last_id+1
             person.last_id+=1
             iterations_new=0
+            ptime=p_time_sec
             print('New ID:',id_new)
-            people.append(person(Xc_new,Xp_new,P_new,rev_new,id_new,iterations_new))
+            people.append(person(Xc_new,Xp_new,P_new,rev_new,id_new,iterations_new,ptime))
 
     #Deletion part
     index=0                                  
