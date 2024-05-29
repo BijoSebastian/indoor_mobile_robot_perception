@@ -20,14 +20,18 @@ kalman_path2=Path()
 measured_path1=Path()
 measured_path2=Path()
 
+apriltag_path1=Path()
+apriltag_path2=Path()
+
 measured_trajectories = {}
 kalman_trajectories = {}
+actual_trajectories = {}
 
 
 
 
 #Variable Initialization
-actualpath = []
+#actualpath = []
 kalmanpath = []
 
 #Functions
@@ -72,6 +76,12 @@ kalmanpath = []
 
     cv2.waitKey(0)'''
 
+def pose_to_position_april(pose):
+    """
+    Convert PoseArray message to a list of (x, y) positions.
+    """
+    return (pose.position.x, pose.position.y)
+
 def pose_to_position(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
@@ -101,15 +111,20 @@ def plot_trajectories():
         print(person_id)
         print(kalman_trajectories)
         kalman_traj = kalman_trajectories.get(person_id, [])
+        actual_traj = actual_trajectories.get(person_id, [])
         if(len(kalman_traj)==0):
             continue
         measured_color = color_cycle[idx % len(color_cycle)]  # Cycle through colors for different persons
         kalman_color = color_cycle[(idx + 1) % len(color_cycle)]
+        actual_color = color_cycle[(idx + 2) % len(color_cycle)]
         ax = axes[idx]
         x, y = zip(*measured_traj)
         ax.plot(x, y, label=f'Person {person_id} (Measured)', color=measured_color)
         x, y = zip(*kalman_traj)
         ax.plot(x, y, label=f'Person {person_id} (Kalman)', color=kalman_color, linestyle='dashed')
+        x, y = zip(*actual_traj)
+        ax.plot(x, y, label=f'Person {person_id} (Actual)', color=actual_color, linestyle='dotted')
+        
         #plt.plot(x, y, label=f'Person {person_id} (Measured)', color='blue')
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
@@ -208,7 +223,16 @@ def measured_callback(pose_array):
         position = pose_to_position(pose)
         update_trajectory(measured_trajectories, pose.ID, position)
     #plot_trajectories()
-    
+
+def apriltag_callback(pose_array):
+    #visualization_markers(pose_array,apriltag_markerarray_pub)
+    for pose in pose_array.poses:
+        #Assign Apriltag id as person id
+        person_id = 2
+        position = pose_to_position_april(pose)
+        update_trajectory(actual_trajectories, person_id, position)
+        print('UPDATING!')
+
 
 def measured_pathmaker(pose,measured_path,measured_path_pub):
 
@@ -237,6 +261,12 @@ def main():
 
     measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
 
+    apriltag_pose_sub = rospy.Subscriber('/apriltag_poses',PoseArray,apriltag_callback)
+
+    apriltag_path_pub1=rospy.Publisher('/apriltag_path1',Path,queue_size=20)
+    apriltag_path_pub2=rospy.Publisher('/apriltag_path2',Path,queue_size=20)    
+
+    apriltag_markerarray_pub=rospy.Publisher('/apriltag_markers',MarkerArray,queue_size=20)
     kalman_path_pub1=rospy.Publisher('/kalman_path1',Path,queue_size=20)
     kalman_path_pub2=rospy.Publisher('/kalman_path2',Path,queue_size=20)
 

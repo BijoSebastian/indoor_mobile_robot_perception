@@ -51,8 +51,9 @@ def callback(scan, image):
     img_points = np.squeeze(img_points)
     for i in range(len(img_points)):
         try:
+            #print((int(round(img_points[i][0])),int(round(img_points[i][1]))))
             cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
-        except OverflowError:
+        except:
             continue
     
     img_8bit = np.uint8(img)

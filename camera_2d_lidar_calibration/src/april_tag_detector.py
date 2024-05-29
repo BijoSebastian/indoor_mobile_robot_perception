@@ -7,13 +7,42 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import Pose, PoseArray
 from cv_bridge import CvBridge
 import apriltag
+from pyquaternion import Quaternion
+import rosparam
 
 options = apriltag.DetectorOptions(families="tag36h11")
 detector = apriltag.Detector(options)
 
+
+
+
+
 class AprilTagPosePublisher:
     def __init__(self):
+        global rot_mat,tvec
         rospy.init_node('apriltag_pose_publisher')
+        # Load parameters from the YAML file into the ROS parameter server
+        calib_file = rospy.get_param("~calib_file")
+
+        with open(calib_file, 'r') as f:
+            data = f.read().split()
+            qx = float(data[0])
+            qy = float(data[1])
+            qz = float(data[2])
+            qw = float(data[3])
+            tx = float(data[4])
+            ty = float(data[5])
+            tz = float(data[6])
+        q = Quaternion(qw,qx,qy,qz).transformation_matrix
+        q[0,3] = tx
+        q[1,3] = ty
+        q[2,3] = tz
+        print("Extrinsic parameter - camera to laser")
+        print(q)
+        tvec = q[:3,3]
+        rot_mat = q[:3,:3]
+        rvec, _ = cv2.Rodrigues(rot_mat)
+
         self.bridge = CvBridge()
         self.tag_size = 0.163  # meters
         self.fx = 982.0966342862777  # focal length in pixels
@@ -49,9 +78,10 @@ class AprilTagPosePublisher:
         p1_k3= 0.008441174793537811
 
         p2_k4= 0.01473335120687576
+
         for r in results:
             (cX, cY) = (int(r.center[0]), int(r.center[1]))
-            print("[INFO] tag ID: {}, center: ({}, {})".format(r.tag_id, cX, cY))
+            #print("[INFO] tag ID: {}, center: ({}, {})".format(r.tag_id, cX, cY))
             
 
             # Draw rectangle around the April tag
@@ -94,7 +124,15 @@ class AprilTagPosePublisher:
 
             dY = vTran[1]
 
-            print('Dx,Dy,dist:',dX,dY,distance)   
+            coord_cam=np.array([distance,
+                      dX,
+                      dY])
+            
+            
+            trans_coord_cam=(rot_mat@coord_cam) + tvec
+
+            trans_coord_cam=trans_coord_cam/100
+
             # Calculate distance
             # tag_corners = np.array(r.corners, dtype=np.float32)
             # perceived_width = np.linalg.norm(tag_corners[0] - tag_corners[1])
@@ -104,13 +142,13 @@ class AprilTagPosePublisher:
             # dY = ((cY - 320) * distance) / self.fy
 
             pose = Pose()
-            pose.position.x = dX
-            pose.position.y = distance
+            pose.position.x = trans_coord_cam[0,0]
+            pose.position.y = trans_coord_cam[1,0]
             self.pose_array.poses.append(pose)
 
             # Print distance
-            print("Tag ID: %d, Distance: %.2f m" % (r.tag_id, distance))
-            print("center: ({}, {})".format(cX, cY))
+            #print("Tag ID: %d, Distance: %.2f m" % (r.tag_id, distance))
+            #print("center: ({}, {})".format(cX, cY))
 
         # Publish the image with April tag detections
         self.image_pub.publish(self.bridge.cv2_to_imgmsg(frame, 'bgr8'))
