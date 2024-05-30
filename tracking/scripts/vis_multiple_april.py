@@ -34,6 +34,12 @@ def pose_to_position(pose):
     """
     return (pose.position.x, pose.position.y)
 
+def pose_to_position_april(pose):
+    """
+    Convert PoseArray message to a list of (x, y) positions.
+    """
+    return (pose.position.z, pose.position.y)
+
 def update_trajectory(trajectory_dict, person_id, position):
     """
     Update trajectory of a specific person in the dictionary.
@@ -101,7 +107,7 @@ def apriltag_callback(pose_array):
     for pose in pose_array.poses:
         #Assign Apriltag id as person id
         person_id = 2
-        position = pose_to_position(pose)
+        position = pose_to_position_april(pose)
         update_trajectory(actual_trajectories, person_id, position)
         print('UPDATING!')
 
@@ -128,7 +134,7 @@ def main():
     global apriltag_markerarray_pub
     rospy.init_node('Visualisation_Node_April')
     print('Visualisation started')
-    apriltag_pose_sub = rospy.Subscriber('/apriltag_poses',PoseArray,apriltag_callback)
+    apriltag_pose_sub = rospy.Subscriber('/lidar_apriltag_pose',PoseArray,apriltag_callback)
 
     apriltag_path_pub1=rospy.Publisher('/apriltag_path1',Path,queue_size=20)
     apriltag_path_pub2=rospy.Publisher('/apriltag_path2',Path,queue_size=20)    

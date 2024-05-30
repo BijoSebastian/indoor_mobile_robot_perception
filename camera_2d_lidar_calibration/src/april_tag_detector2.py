@@ -5,8 +5,7 @@ import cv2
 import apriltag
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
-from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Path
+from geometry_msgs.msg import Pose, PoseArray
 import numpy as np
 import tf.transformations
 
@@ -15,11 +14,8 @@ class AprilTagDetector:
         self.bridge = CvBridge()
         self.detector = apriltag.Detector()
         self.image_sub = rospy.Subscriber('/usb_cam/image_raw', Image, self.image_callback)
-        self.pose_pub = rospy.Publisher('/apriltag_pose', PoseStamped, queue_size=10)
         self.image_pub = rospy.Publisher('/camera/image_annotated', Image, queue_size=10)
-        self.lidar_pose_pub = rospy.Publisher('/lidar_apriltag_pose', PoseStamped, queue_size=10)
-        self.path_pub = rospy.Publisher('/apriltag_path', Path, queue_size=10)
-        self.lidar_path_pub = rospy.Publisher('/lidar_apriltag_path', Path, queue_size=10)
+        self.lidar_pose_pub = rospy.Publisher('/lidar_apriltag_pose', PoseArray, queue_size=10)
 
         # Camera intrinsic parameters
         self.camera_matrix = np.array([
@@ -34,13 +30,6 @@ class AprilTagDetector:
 
         # Load the extrinsic parameters
         self.load_extrinsic_parameters()
-
-        # Initialize path messages
-        self.path_msg = Path()
-        self.path_msg.header.frame_id = "camera_link"
-
-        self.lidar_path_msg = Path()
-        self.lidar_path_msg.header.frame_id = "lidar_link"
 
     def load_extrinsic_parameters(self):
         rospy.loginfo("Loading extrinsic parameters from file")
@@ -68,6 +57,8 @@ class AprilTagDetector:
         self.rot_mat_c_to_l = q[:3, :3]
 
     def image_callback(self, msg):
+        global present_timestamp
+        present_timestamp = msg.header.stamp
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
         except CvBridgeError as e:
@@ -81,12 +72,9 @@ class AprilTagDetector:
         for tag in tags:
             pose = self.estimate_pose(tag)
             if pose is not None:
-                self.publish_pose(pose, tag.tag_id)
                 self.draw_tag(cv_image, tag)
-                self.update_path(pose)
                 lidar_pose = self.transform_to_lidar_frame(pose)
-                self.publish_lidar_pose(lidar_pose, tag.tag_id)
-                self.update_lidar_path(lidar_pose)
+                self.publish_lidar_pose(lidar_pose, present_timestamp)
 
         try:
             annotated_image_msg = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
@@ -111,47 +99,40 @@ class AprilTagDetector:
 
         success, rvec, tvec = cv2.solvePnP(object_points, image_points, self.camera_matrix, self.dist_coeffs)
         if success:
-            pose = PoseStamped()
-            pose.header.stamp = rospy.Time.now()
-            pose.header.frame_id = "camera_link"
-            pose.pose.position.x = tvec[0][0]
-            pose.pose.position.y = tvec[1][0]
-            pose.pose.position.z = tvec[2][0]
+            pose = Pose()
+            pose.position.x = tvec[0][0]
+            pose.position.y = tvec[1][0]
+            pose.position.z = tvec[2][0]
+
+            # Convert rotation vector to quaternion
+            # rot_matrix = cv2.Rodrigues(rvec)[0]
+            # quat = tf.transformations.quaternion_from_matrix(np.hstack((rot_matrix, [[0], [0], [0]])))
+            # pose.orientation.x = quat[0]
+            # pose.orientation.y = quat[1]
+            # pose.orientation.z = quat[2]
+            # pose.orientation.w = quat[3]
 
             return pose
         else:
             return None
 
     def transform_to_lidar_frame(self, pose):
-        position_camera = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
+        position_camera = np.array([pose.position.x, pose.position.y, pose.position.z])
         position_lidar = self.rot_mat_c_to_l.dot(position_camera) + self.tvec_c_to_l
 
-        lidar_pose = PoseStamped()
-        lidar_pose.header.stamp = rospy.Time.now()
-        lidar_pose.header.frame_id = "lidar_link"
-        lidar_pose.pose.position.x = position_lidar[0]
-        lidar_pose.pose.position.y = position_lidar[1]
-        lidar_pose.pose.position.z = position_lidar[2]
+        lidar_pose = Pose()
+        lidar_pose.position.x = position_lidar[0]
+        lidar_pose.position.y = position_lidar[1]
+        lidar_pose.position.z = position_lidar[2]
 
         return lidar_pose
 
-    def publish_pose(self, pose, tag_id):
-        pose.header.frame_id = "apriltag_{}".format(tag_id)
-        self.pose_pub.publish(pose)
-
-    def publish_lidar_pose(self, pose, tag_id):
-        pose.header.frame_id = "lidar_apriltag_{}".format(tag_id)
-        self.lidar_pose_pub.publish(pose)
-
-    def update_path(self, pose):
-        self.path_msg.header.stamp = rospy.Time.now()
-        self.path_msg.poses.append(pose)
-        self.path_pub.publish(self.path_msg)
-
-    def update_lidar_path(self, pose):
-        self.lidar_path_msg.header.stamp = rospy.Time.now()
-        self.lidar_path_msg.poses.append(pose)
-        self.lidar_path_pub.publish(self.lidar_path_msg)
+    def publish_lidar_pose(self, pose, timestamp):
+        pose_array = PoseArray()
+        pose_array.header.stamp = timestamp
+        pose_array.header.frame_id = "lidar_link"
+        pose_array.poses.append(pose)
+        self.lidar_pose_pub.publish(pose_array)
 
     def draw_tag(self, image, tag):
         # Draw the bounding box
