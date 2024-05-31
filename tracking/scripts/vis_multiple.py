@@ -80,7 +80,7 @@ def pose_to_position_april(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
     """
-    return (pose.position.x, pose.position.y)
+    return (pose.position.z, pose.position.y)
 
 def pose_to_position(pose):
     """
@@ -261,7 +261,7 @@ def main():
 
     measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
 
-    apriltag_pose_sub = rospy.Subscriber('/apriltag_poses',PoseArray,apriltag_callback)
+    apriltag_pose_sub = rospy.Subscriber('/lidar_apriltag_pose',PoseArray,apriltag_callback)
 
     apriltag_path_pub1=rospy.Publisher('/apriltag_path1',Path,queue_size=20)
     apriltag_path_pub2=rospy.Publisher('/apriltag_path2',Path,queue_size=20)    

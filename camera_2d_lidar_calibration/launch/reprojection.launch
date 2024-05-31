@@ -1,6 +1,6 @@
 <launch>
 
-    <node name="reprojection" pkg="camera_2d_lidar_calibration" type="reprojection_original.py" output="screen">
+    <node name="reprojection" pkg="camera_2d_lidar_calibration" type="reprojection.py" output="screen">
         <param name="scan_topic" value="/scan" />
         <!-- <param name="scan_topic" value="/hokuyo" > -->
         <param name="image_topic" value="usb_cam/image_rect_color" />
@@ -12,7 +12,7 @@
         <param name="time_diff" type="double" value="0.6" />  <!-- Maximum time difference in seconds between image and laser scan to be registered and processed -->
     </node>
 
-    <node name="apriltag_pose_publisher" pkg="camera_2d_lidar_calibration" type="april_tag_detector.py" output="screen">
+    <node name="apriltag_pose_publisher" pkg="camera_2d_lidar_calibration" type="april_tag_detector2.py" output="screen">
         <param name="calib_file" value="$(find camera_2d_lidar_calibration)/data/calibration_result.txt" />
     </node>
 
