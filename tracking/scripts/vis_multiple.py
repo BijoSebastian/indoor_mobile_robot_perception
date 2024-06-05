@@ -80,7 +80,7 @@ def pose_to_position_april(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
     """
-    return (pose.position.z, pose.position.y)
+    return (-pose.position.y, -pose.position.z)
 
 def pose_to_position(pose):
     """
@@ -96,6 +96,56 @@ def update_trajectory(trajectory_dict, person_id, position):
         trajectory_dict[person_id] = []
     trajectory_dict[person_id].append(position)
 
+
+# def plot_trajectories():
+#     """
+#     Plot trajectories of all persons.
+#     """
+#     color_cycle = plt.cm.tab10.colors
+#     num_persons = len(measured_trajectories)
+#     num_rows = math.ceil(num_persons / 2)  # Adjust the number of rows based on the number of persons
+#     fig, axes = plt.subplots(num_rows, 2, figsize=(12, 6 * num_rows))  # Create subplots
+#     axes = axes.flatten()
+    
+#     for idx, (person_id, measured_traj) in enumerate(measured_trajectories.items()):
+#         kalman_traj = kalman_trajectories.get(person_id, [])
+#         actual_traj = actual_trajectories.get(person_id, [])  # Use the correct key for actual trajectories
+
+#         if len(kalman_traj) == 0:
+#             continue
+
+#         measured_color = color_cycle[idx % len(color_cycle)]  # Cycle through colors for different persons
+#         kalman_color = color_cycle[(idx + 1) % len(color_cycle)]
+#         actual_color = color_cycle[(idx + 2) % len(color_cycle)]
+#         ax = axes[idx]
+        
+#         if measured_traj:
+#             x, y = zip(*measured_traj)
+#             ax.plot(x, y, label=f'Person {person_id} (Measured)', color=measured_color)
+        
+#         if kalman_traj:
+#             x, y = zip(*kalman_traj)
+#             ax.plot(x, y, label=f'Person {person_id} (Kalman)', color=kalman_color, linestyle='dashed')
+        
+#         if actual_traj:
+#             x, y = zip(*actual_traj)
+#             ax.plot(x, y, label=f'Person {person_id} (Actual)', color=actual_color, linestyle='dotted')
+
+#         ax.set_xlabel('X')
+#         ax.set_ylabel('Y')
+#         ax.set_title(f'Trajectories of Person {person_id}')
+#         ax.legend()
+#         ax.grid(True)
+        
+#         # Set axis limits to always range from -3 to +3
+#         ax.set_xlim([-3, 3])
+#         ax.set_ylim([-3, 3])
+#         ax.plot(0, 0, 'o')  # Mark the origin
+
+#     plt.tight_layout()
+#     plt.show()
+#     plt.pause(10)
+
 def plot_trajectories():
     """
     Plot trajectories of all persons.
@@ -109,9 +159,9 @@ def plot_trajectories():
     #for person_id, measured_traj in measured_trajectories.items():
     for idx, (person_id, measured_traj) in enumerate(measured_trajectories.items()):
         print(person_id)
-        print(kalman_trajectories)
+        print('actual_trajectories:',actual_trajectories)
         kalman_traj = kalman_trajectories.get(person_id, [])
-        actual_traj = actual_trajectories.get(person_id, [])
+        actual_traj = actual_trajectories.get(2, []) #change this part. Its been hard coded
         if(len(kalman_traj)==0):
             continue
         measured_color = color_cycle[idx % len(color_cycle)]  # Cycle through colors for different persons

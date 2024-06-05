@@ -2,7 +2,7 @@
 # camera parameter
 # lens is either pinhole or fisheye
 
-lens: pinhole
+lens: fisheye
 
 # fx: 982.0966342862777 
 # fy: 980.5978480470865
