@@ -38,7 +38,8 @@ def pose_to_position_april(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
     """
-    return (pose.position.z, pose.position.y)
+    # return (pose.position.z, pose.position.y)
+    return (-pose.position.z, -pose.position.x)
 
 def update_trajectory(trajectory_dict, person_id, position):
     """

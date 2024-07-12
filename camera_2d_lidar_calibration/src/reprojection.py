@@ -15,8 +15,23 @@ from scipy.optimize import linear_sum_assignment
 from std_msgs.msg import Header
 import time
 
+def ensure_2d_array(arr):
+  """Converts an array to a 2D NumPy array.
+
+  Args:
+      arr: The input array.
+
+  Returns:
+      A 2D NumPy array, even if the input was a 1D array.
+  """
+  return np.atleast_2d(arr)
+
+
 #HUNGARIAN ALGORITHM
 def cost_matrix(poses1,poses2):
+
+    poses1=ensure_2d_array(poses1)
+    poses2=ensure_2d_array(poses2)
 
     cost_mat=np.empty([len(poses1),len(poses2)])
     row=0
@@ -152,6 +167,9 @@ def get_z(T_cam_world, T_world_pc, K):
     R = T_cam_world[:3,:3]
     t = T_cam_world[:3,3]
     proj_mat = np.dot(K, np.hstack((R, t[:,np.newaxis])))
+    if len(T_world_pc.shape) == 1:
+        T_world_pc = np.atleast_2d(T_world_pc)
+
     xyz_hom = np.hstack((T_world_pc, np.ones((T_world_pc.shape[0], 1))))
     xy_hom = np.dot(proj_mat, xyz_hom.T).T
     z = xy_hom[:, -1]
@@ -224,68 +242,73 @@ def callback(image,lidar_detections,scan):
     Z_detections = get_z(q, obj_detected_Points, K)
     obj_detected_Points=obj_detected_Points[Z_detections>0]
 
-    if not np.any(obj_detected_Points):
-        print("No detected points from LiDAR. Skipping projection of detected points.")
+    if ((not np.any(obj_detected_Points)) or (not np.any(cam_detections))):
+        print("No detected points from LiDAR or Camera. Skipping projection of detected points.")
 
     else:
     
-        try:
-            if lens == 'pinhole':
-                #Detections Projection
-                detected_points, _ = cv2.projectPoints(obj_detected_Points, rvec, tvec, K, D)
-            elif lens == 'fisheye':
-                #Detections Projection
-                obj_detected_Points = np.reshape(obj_detected_Points, (1,obj_detected_Points.shape[0],obj_detected_Points.shape[1]))
-                detected_points, _ = cv2.fisheye.projectPoints(obj_detected_Points, rvec, tvec, K, D)
-            
-            detected_points = np.round(np.squeeze(detected_points))
-            detected_points=detected_points.astype(int)
-            for i in range(len(detected_points)):
-                try:
-                    if not np.isscalar(detected_points[i]):  # Check if not a scalar
-                        if len(detected_points[i]) == 2:
-                            cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
-                        else:
-                            print(f"Error: detected_points[{i}] is not a valid 2D tuple. Skipping circle.")
+        #try:
+        if lens == 'pinhole':
+            #Detections Projection
+            detected_points, _ = cv2.projectPoints(obj_detected_Points, rvec, tvec, K, D)
+        elif lens == 'fisheye':
+            #Detections Projection
+            obj_detected_Points = np.asarray(obj_detected_Points)  # Ensure NumPy array
+            # Check if single element or 1D array and reshape if necessary
+            if len(obj_detected_Points.shape) == 0 or obj_detected_Points.shape[0] == 1:
+                obj_detected_Points = np.atleast_2d(obj_detected_Points)
+            obj_detected_Points = np.reshape(obj_detected_Points, (1,obj_detected_Points.shape[0],obj_detected_Points.shape[1]))
+            detected_points, _ = cv2.fisheye.projectPoints(obj_detected_Points, rvec, tvec, K, D)
+        
+        detected_points = np.round(np.squeeze(detected_points))
+        detected_points=detected_points.astype(int)
+        for i in range(len(detected_points)):
+                if not np.isscalar(detected_points[i]):  # Check if not a scalar
+                    if len(detected_points[i]) == 2:
+                        cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
                     else:
-                        print(f"Error: detected_points[{i}] is a scalar after projection. Skipping circle.")
+                        print(f"Error: detected_points[{i}] is not a valid 2D tuple. Skipping circle.")
+                else:
+                    print(f"Error: detected_points[{i}] is a scalar after projection. Skipping circle.")
 
 
-                    #cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
-                except Exception as err:
-                    print("THE ERROR IN PLOTTING CIRCLES!")
-                    print(err)
-                    continue
+                
 
-            cost=cost_matrix(detected_points,cam_detections)
+        cost=cost_matrix(detected_points,cam_detections)
+        print('detected_points:',detected_points)
 
-            #Solve the assignment problem
-            row_indices, col_indices = linear_sum_assignment(cost)
+        #Solve the assignment problem
+        row_indices, col_indices = linear_sum_assignment(cost)
 
-            # # Extract the optimal assignment
-            assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
-            
-            for row, col in assignment:
-                print(f"Pose {obj_detected_Points[0][row]} in poses1, assigned to poses {cam_detections[col]} in Poses2")
-                try:
-                    print('detected_points:',detected_points[row])
-                    print('cam_detections:',cam_detections[col])
-                    cv2.line(img, detected_points[row], cam_detections[col], (255, 255, 0) , 5) 
-                except Exception as err:
-                    print("The error:",err)
-                paired_pose=[obj_detected_Points[0][row],cam_detections[col]] #[Laser detections, camera detections]
-                paired_pose_array.append(paired_pose)
+        # # Extract the optimal assignment
+        assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
+        
+        for row, col in assignment:
+            print('row, col:',row, col)
+            print('obj_detected_Points:',obj_detected_Points)
+            print(f"Pose {obj_detected_Points[0][row]} in poses1, assigned to poses {cam_detections[col]} in Poses2")
+            print('detected_points:',detected_points)
+            print('detected_point:',detected_points[row])
+            print('cam_detections:',cam_detections[col])
+            print('Type:',type(detected_points[row]))
+            if isinstance(detected_points[row], (list, np.ndarray)):
+                cv2.line(img, detected_points[row], cam_detections[col], (255, 255, 0) , 5) 
+            else:
+                cv2.line(img, detected_points, cam_detections[col], (255, 255, 0) , 5)
 
-            for k in paired_pose_array:
-                filtered_pose=Pose()
-                filtered_pose.position.x,filtered_pose.position.y=k[0][0],k[0][1]
-                filtered_pose_array.poses.append(filtered_pose)
+            paired_pose=[obj_detected_Points[0][row],cam_detections[col]] #[Laser detections, camera detections]
+            paired_pose_array.append(paired_pose)
+
+        for k in paired_pose_array:
+            filtered_pose=Pose()
+            filtered_pose.position.x,filtered_pose.position.y=k[0][0],k[0][1]
+            filtered_pose_array.poses.append(filtered_pose)
 
         
 
-        except Exception as err:
-            print('ERROR IN PROJECTION AND MAPPING!')
-            print(err)
+        # except Exception as err:
+        #     print('ERROR IN PROJECTION AND MAPPING!')
+        #     print(err)
         
         
     after_callback_time=rospy.Time.now()

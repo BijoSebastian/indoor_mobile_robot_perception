@@ -31,6 +31,9 @@ class AprilTagDetector:
         # Load the extrinsic parameters
         self.load_extrinsic_parameters()
 
+
+
+
     def load_extrinsic_parameters(self):
         rospy.loginfo("Loading extrinsic parameters from file")
         calib_file = rospy.get_param("~calib_file")
@@ -117,7 +120,8 @@ class AprilTagDetector:
             return None
 
     def transform_to_lidar_frame(self, pose):
-        position_camera = np.array([pose.position.x, pose.position.y, pose.position.z])
+        #position_camera = np.array([pose.position.x, pose.position.y, pose.position.z])
+        position_camera = np.array([pose.position.x, -pose.position.y, -pose.position.z])
         position_lidar = self.rot_mat_c_to_l.dot(position_camera) + self.tvec_c_to_l
 
         lidar_pose = Pose()

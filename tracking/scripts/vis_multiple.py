@@ -80,8 +80,9 @@ def pose_to_position_april(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
     """
-    return (-pose.position.y, -pose.position.z)
-
+    #return (-pose.position.y, -pose.position.z) #Check why do I have to do this?
+    return (-pose.position.z, -pose.position.x)
+    
 def pose_to_position(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
