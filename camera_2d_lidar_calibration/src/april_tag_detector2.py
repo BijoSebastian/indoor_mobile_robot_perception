@@ -8,14 +8,15 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import Pose, PoseArray
 import numpy as np
 import tf.transformations
+from tracking.msg import PoseID, PoseIDArray
 
 class AprilTagDetector:
     def __init__(self):
         self.bridge = CvBridge()
         self.detector = apriltag.Detector()
-        self.image_sub = rospy.Subscriber('/usb_cam/image_raw', Image, self.image_callback)
+        self.image_sub = rospy.Subscriber('/usb_cam/image_rect', Image, self.image_callback)
         self.image_pub = rospy.Publisher('/camera/image_annotated', Image, queue_size=10)
-        self.lidar_pose_pub = rospy.Publisher('/lidar_apriltag_pose', PoseArray, queue_size=10)
+        self.lidar_pose_pub = rospy.Publisher('/lidar_apriltag_pose', PoseIDArray, queue_size=10)
 
         # Camera intrinsic parameters
         self.camera_matrix = np.array([
@@ -29,7 +30,48 @@ class AprilTagDetector:
         self.tag_size = 0.16
 
         # Load the extrinsic parameters
-        self.load_extrinsic_parameters()
+        #self.load_extrinsic_parameters()
+        qx = 0.9861527612744059
+
+        qy = 0.0076052073314031125
+
+        qz = -0.07028492197118058
+
+        qw = 0.15001640575555797
+
+        tx = 0.0010316738086038613
+
+        ty = -0.26032098490345245-0.08
+        
+
+        tz = -0.006141912038532205
+
+
+
+        q = tf.transformations.quaternion_matrix([qw, qx, qy, qz])
+
+        #Manually adding translation
+        tx=0
+        ty=-0.05
+        tz=0
+
+        q[0, 3] = tx
+
+        q[1, 3] = ty    
+
+        q[2, 3] = tz
+
+        
+
+
+
+        rospy.loginfo("Extrinsic parameter - camera to LiDAR:")
+
+        rospy.loginfo(q)
+
+        self.tvec_c_to_l = q[:3, 3]
+
+        self.rot_mat_c_to_l = q[:3, :3]
 
 
 
@@ -49,6 +91,11 @@ class AprilTagDetector:
             tz = float(data[6])
         
         q = tf.transformations.quaternion_matrix([qw, qx, qy, qz])
+        #Manually adding translation
+        tx=0
+        ty=-0.02
+        tz=-0.06
+
         q[0, 3] = tx
         q[1, 3] = ty
         q[2, 3] = tz
@@ -76,8 +123,9 @@ class AprilTagDetector:
             pose = self.estimate_pose(tag)
             if pose is not None:
                 self.draw_tag(cv_image, tag)
-                lidar_pose = self.transform_to_lidar_frame(pose)
+                lidar_pose = self.transform_to_lidar_frame_manual(pose)
                 self.publish_lidar_pose(lidar_pose, present_timestamp)
+                #self.publish_lidar_pose(pose, present_timestamp)
 
         try:
             annotated_image_msg = self.bridge.cv2_to_imgmsg(cv_image, "bgr8")
@@ -102,10 +150,11 @@ class AprilTagDetector:
 
         success, rvec, tvec = cv2.solvePnP(object_points, image_points, self.camera_matrix, self.dist_coeffs)
         if success:
-            pose = Pose()
-            pose.position.x = tvec[0][0]
-            pose.position.y = tvec[1][0]
-            pose.position.z = tvec[2][0]
+            pose = PoseID()
+            pose.ID=tag.tag_id
+            pose.pose.position.x = tvec[0][0]
+            pose.pose.position.y = tvec[1][0]
+            pose.pose.position.z = tvec[2][0]
 
             # Convert rotation vector to quaternion
             # rot_matrix = cv2.Rodrigues(rvec)[0]
@@ -119,20 +168,32 @@ class AprilTagDetector:
         else:
             return None
 
-    def transform_to_lidar_frame(self, pose):
-        #position_camera = np.array([pose.position.x, pose.position.y, pose.position.z])
-        position_camera = np.array([pose.position.x, -pose.position.y, -pose.position.z])
-        position_lidar = self.rot_mat_c_to_l.dot(position_camera) + self.tvec_c_to_l
+    # def transform_to_lidar_frame(self, pose):
+    #     #position_camera = np.array([pose.position.x, pose.position.y, pose.position.z])
+    #     position_camera = np.array([pose.position.x, -pose.position.y, -pose.position.z])
+    #     position_lidar = self.rot_mat_c_to_l.dot(position_camera) + self.tvec_c_to_l
 
-        lidar_pose = Pose()
-        lidar_pose.position.x = position_lidar[0]
-        lidar_pose.position.y = position_lidar[1]
-        lidar_pose.position.z = position_lidar[2]
+    #     lidar_pose = Pose()
+    #     lidar_pose.position.x = position_lidar[0]
+    #     lidar_pose.position.y = position_lidar[1]
+    #     lidar_pose.position.z = position_lidar[2]
+
+    #     return lidar_pose
+    
+    def transform_to_lidar_frame_manual(self, pose):
+        #position_camera = np.array([pose.position.x, pose.position.y, pose.position.z])
+        position_camera = np.array([pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
+        position_lidar = position_camera - self.tvec_c_to_l
+        lidar_pose = PoseID()
+        lidar_pose.ID=pose.ID
+        lidar_pose.pose.position.x = position_lidar[0]
+        lidar_pose.pose.position.y = position_lidar[1]
+        lidar_pose.pose.position.z = position_lidar[2]
 
         return lidar_pose
 
     def publish_lidar_pose(self, pose, timestamp):
-        pose_array = PoseArray()
+        pose_array = PoseIDArray()
         pose_array.header.stamp = timestamp
         pose_array.header.frame_id = "lidar_link"
         pose_array.poses.append(pose)

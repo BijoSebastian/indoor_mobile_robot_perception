@@ -26,7 +26,11 @@ from std_msgs.msg import Header
 from scipy.optimize import least_squares
 
 #Maybe later we could use Pose stamped
-
+# Global Variables
+background_scan = None
+pose_lidar_pub = None
+first_time = True
+max_range = 4.0  # Set this to the maximum range of your lidar
 
 # Global Variables
 marker = Marker()
@@ -153,35 +157,50 @@ def visualization_point(center):
 
     visualpub.publish(marker)
 
-    
+def filter_infs(scan):
+    return np.array([min(r, max_range) if not np.isinf(r) else max_range for r in scan])
+ 
 
 def callback(msg):
     # Getting the polar coordinates of the point cloud
-    global pose,first_time,t0,firstplottime,ax,fig
+    global pose,first_time,t0,firstplottime,ax,fig,background_scan
+
+    current_scan = filter_infs(np.array(msg.ranges))
 
     #Time handling
     if(first_time==True):
+        background_scan = current_scan
         t0=msg.header.stamp.to_nsec()*(10**(-9))
+        rospy.loginfo("Background scan stored")
         first_time=False
+        return
 
     ptime_stamp=msg.header.stamp
     t_now=ptime_stamp.to_nsec()*(10**(-9))
     time_now=t_now-t0
-    print("The time now:",time_now)
     before_clustering_time=rospy.Time.now()
     before_clustering_time_sec=before_clustering_time.to_nsec()*(10**(-9))
 
-    pts_r = np.array(msg.ranges)
-    delfi = msg.angle_increment
-    pts_ang = np.arange(start=msg.angle_min, stop=msg.angle_max, step=delfi)
+    difference = np.abs(current_scan - background_scan)
 
-    pts_r_list = list(pts_r)
-    pts_ang_list = list(pts_ang)
+    # Set a threshold for considering the difference as a significant change
+    threshold = 0.2
+    significant_indices = np.where(difference > threshold)[0]
+    
+    pts_r = current_scan[significant_indices]
+    pts_ang = np.linspace(msg.angle_min, msg.angle_max, len(msg.ranges))[significant_indices]
+
+    # pts_r = np.array(msg.ranges)
+    # delfi = msg.angle_increment
+    # pts_ang = np.arange(start=msg.angle_min, stop=msg.angle_max, step=delfi)
+
+    # pts_r_list = list(pts_r)
+    # pts_ang_list = list(pts_ang)
 
     newscan_rect = []  #Contains point cloud in rectangular coordinates
     newscan_polar=[] #Contains point cloud in polar coordinates
-    for r, ang in zip(pts_r_list, pts_ang_list):
-        if ((not np.isinf(r))) and (abs(r)<4):#Constraining scan to 1 radius circle 'and abs(r)<1'
+    for r, ang in zip(pts_r, pts_ang):
+        if ((not np.isinf(r))) and (abs(r)<max_range):#Constraining scan to 1 radius circle 'and abs(r)<1'
             newscan_polar.append([r,ang])
             newscan_rect.append(polartorect([r, ang]))
 
@@ -204,8 +223,6 @@ def callback(msg):
 
         outliers = DBSCAN_dataset[DBSCAN_dataset['Cluster']==-1]
 
-        # print("No. of clusters:")
-        # print(DBSCAN_dataset.Cluster.unique().size)
         cluster=DBSCAN_dataset[DBSCAN_dataset['Cluster']==0]
         
         clusters = []
@@ -222,20 +239,18 @@ def callback(msg):
             fitted_circles = fit_clusters_into_circles2(clusters) #It ll say some serialization error
             #fitted_circles=avg_cluster(clusters) #remove later
         except:
-            print("There is error")
+            print("!!!!There is error in fitting circle!!!!")
 
         people=[]
         for p in fitted_circles:
             
             if(p[1]<0.2 and p[1]>0.01):
-                print("Person Detected!!")
-                print('Person coordinates:',p[0])
                 people.append(list(p[0]))
             #people.append(p)
         lidar_poses=PoseArray()
 
         #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
-        lidar_poses.header = Header(stamp=ptime_stamp, frame_id="base_frame")
+        lidar_poses.header = Header(stamp=ptime_stamp, frame_id="map")
 
         
         for k in people:
@@ -275,43 +290,14 @@ def callback(msg):
         plt.clf()
         plt.close(fig)
 
-        #print(lidar_poses)
-
-        
-
-        # except:
-        #     print("There is an error")
-
-
-
-        # center_x=(sum(cluster['x'])/len(cluster['x']))
-        # center_y=(sum(cluster['y'])/len(cluster['y']))
-
-        # pose.position.x=center_x
-        # pose.position.y=center_y
-
-        # posepub.publish(pose)
-
-        # center=[center_x,center_y]
-
-        # print("Center1:")
-        # print(center)
-
-        #visualization_point(center)
-
     except Exception as error:
 
         lidar_poses.poses=[]
-        print(error)
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
-        #pose_lidar_pub.publish(lidar_poses)
-
-        # posepub.publish(pose)
+        print('!!!!There is error in clustering:',error)
+        
     after_clustering_time=rospy.Time.now()
     after_clustering_time_sec=after_clustering_time.to_nsec()*(10**(-9))
     time_elapse=after_clustering_time_sec-before_clustering_time_sec
-    print("Time taken for clustering:",time_elapse)
     pose_lidar_pub.publish(lidar_poses)
 
     
