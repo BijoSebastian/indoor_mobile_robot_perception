@@ -9,6 +9,7 @@ from geometry_msgs.msg import Pose, PoseArray
 import numpy as np
 import tf.transformations
 from tracking.msg import PoseID, PoseIDArray
+import csv
 
 class AprilTagDetector:
     def __init__(self):
@@ -73,6 +74,12 @@ class AprilTagDetector:
 
         self.rot_mat_c_to_l = q[:3, :3]
 
+        # CSV file initialization
+        self.csv_file = "/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/pose_data.csv"  # Specify your desired file path here
+        with open(self.csv_file, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Tag ID", "X", "Y", "Z"])
+
 
 
 
@@ -123,7 +130,10 @@ class AprilTagDetector:
             pose = self.estimate_pose(tag)
             if pose is not None:
                 self.draw_tag(cv_image, tag)
+                print('pose in camera frame:',pose)
+                self.write_pose_to_csv(pose)
                 lidar_pose = self.transform_to_lidar_frame_manual(pose)
+                print('pose in lidar frame:',lidar_pose)
                 self.publish_lidar_pose(lidar_pose, present_timestamp)
                 #self.publish_lidar_pose(pose, present_timestamp)
 
@@ -215,6 +225,12 @@ class AprilTagDetector:
                     tuple(tag.center.astype(int)), 
                     cv2.FONT_HERSHEY_SIMPLEX, 
                     0.5, (255, 0, 0), 2)
+    
+    def write_pose_to_csv(self, pose):
+        with open(self.csv_file, 'a', newline='') as file:
+            writer = csv.writer(file)
+            print('WRITING')
+            writer.writerow([pose.ID, pose.pose.position.x, pose.pose.position.y, pose.pose.position.z])
 
 if __name__ == '__main__':
     rospy.init_node('april_tag_detector', anonymous=True)

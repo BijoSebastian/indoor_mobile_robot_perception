@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import math
 
 from visualization_msgs.msg import Marker,MarkerArray
-from geometry_msgs.msg import Pose,PoseStamped,PoseArray
+from geometry_msgs.msg import Pose,PoseStamped,PoseArray,PointStamped
 from nav_msgs.msg import Path
 from tracking.msg import PoseID,PoseIDArray
 
@@ -112,6 +112,15 @@ def apriltag_callback(pose_array):
         update_trajectory(actual_trajectories, person_id, position)
         print('UPDATING!')
 
+def apriltag_callback_point(point):
+    #visualization_markers(pose_array,apriltag_markerarray_pub)
+    
+    #Assign Apriltag id as person id
+    person_id = 2
+    position = (point.point.x,point.point.y)
+    update_trajectory(actual_trajectories, person_id, position)
+    print('UPDATING!')
+
 
 def measured_pathmaker(pose,measured_path,measured_path_pub):
 
@@ -135,7 +144,9 @@ def main():
     global apriltag_markerarray_pub
     rospy.init_node('Visualisation_Node_April')
     print('Visualisation started')
-    apriltag_pose_sub = rospy.Subscriber('/lidar_apriltag_pose',PoseArray,apriltag_callback)
+    
+    #1apriltag_pose_sub = rospy.Subscriber('/lidar_apriltag_pose',PoseArray,apriltag_callback)
+    apriltag_pose_sub = rospy.Subscriber('/ground_truth',PointStamped,apriltag_callback_point)
 
     apriltag_path_pub1=rospy.Publisher('/apriltag_path1',Path,queue_size=20)
     apriltag_path_pub2=rospy.Publisher('/apriltag_path2',Path,queue_size=20)    
@@ -151,4 +162,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-#The nnumber of circles keeps changing
+#The number of circles keeps changing
