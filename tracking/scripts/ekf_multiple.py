@@ -246,10 +246,16 @@ def callback(msg):
                 #plt.scatter(i[1],i[2],color='red')
                 print("UPDATING POSE OF ",j.id)
                 meas_new=(j).heading_angle(meas)
-                (j).measurement_update(meas_new)
-                print('ID:',j.id)
-                print('Xc:',j.Xc)
-                break
+                present_position=np.array([meas_new[0][0],meas_new[1][0]])
+                prev_position=np.array([j.Xc[0][0],j.Xc[1][0]])
+                if(np.linalg.norm(present_position-prev_position)<=0.7):
+                    (j).measurement_update(meas_new)
+                    print('ID:',j.id)
+                    print('Xc:',j.Xc)
+                    break
+                else:
+                    print('Actually didnt update cuz it was too far away. EKF is too lazy')
+                    break
         if(i[0]==0 or i[0]!=j.id):
             print("NEW CREATED")
             Xc_new=np.array([[meas[0]],

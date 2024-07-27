@@ -80,7 +80,8 @@ def pose_to_position_april(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
     """
-    return (-pose.pose.position.z, -pose.pose.position.y) #Check why do I have to do this?
+    #return (-pose.pose.position.z, -pose.pose.position.y) #Check why do I have to do this?
+    return (pose.pose.position.x, pose.pose.position.y)
     #return (-pose.position.z, -pose.position.x)
     
 def pose_to_position(pose):
@@ -160,11 +161,14 @@ def plot_trajectories():
     #for person_id, measured_traj in measured_trajectories.items():
     for idx, (person_id, measured_traj) in enumerate(measured_trajectories.items()):
         print(person_id)
-        print('actual_trajectories:',actual_trajectories)
+        #print('actual_trajectories:',actual_trajectories)
         kalman_traj = kalman_trajectories.get(person_id, [])
         # actual_traj = actual_trajectories.get(2, []) #change this part. Its been hard coded
         actual_traj = actual_trajectories.get(person_id, []) #change this part. Its been hard coded
-
+        print('actual_traj',actual_traj)
+        if not actual_traj:
+            print("The trajectory list is empty. Cannot plot trajectories.")
+            continue
         if(len(kalman_traj)==0):
             continue
         measured_color = color_cycle[idx % len(color_cycle)]  # Cycle through colors for different persons
@@ -282,14 +286,16 @@ def apriltag_callback(pose_array):
     for pose in pose_array.poses:
         #Assign Apriltag id as person id
         person_id = pose.ID
-        print(f'$$$$Person id:{person_id}$$$$')
+        #print(f'$$$$Person id:{person_id}$$$$')
+        #print('person id:',person_id)
+        if person_id == 13: #CHANGE THIS TO 12 FOR 2 PEOPLE ROSBAG
+            person_id=3
+            #print('Person id is 13')
         if person_id == 12:
             person_id=2
-        if person_id == 13:
-            person_id=3
         position = pose_to_position_april(pose)
         update_trajectory(actual_trajectories, person_id, position)
-        print('UPDATING!')
+        #print('UPDATING!')
 
 
 def measured_pathmaker(pose,measured_path,measured_path_pub):
@@ -319,7 +325,7 @@ def main():
 
     measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
 
-    apriltag_pose_sub = rospy.Subscriber('/lidar_apriltag_pose',PoseIDArray,apriltag_callback)
+    apriltag_pose_sub = rospy.Subscriber('/ground_truth',PoseIDArray,apriltag_callback)
 
     apriltag_path_pub1=rospy.Publisher('/apriltag_path1',Path,queue_size=20)
     apriltag_path_pub2=rospy.Publisher('/apriltag_path2',Path,queue_size=20)    

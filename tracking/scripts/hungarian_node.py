@@ -102,7 +102,8 @@ def callback(filtered_pose_array,predicted_pose_array):
     for row, col in assignment:
         print(f"Pose {filtered_xy_list[row]} in poses1, assigned to poses {predicted_xy_list[col]} in Poses2")
         
-        #if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=2):
+        #if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=0.7):
+
         selected_xy_list.append(filtered_xy_list[row])
 
         ided_pose=PoseID()
@@ -111,6 +112,9 @@ def callback(filtered_pose_array,predicted_pose_array):
         ided_pose.ID=ids[col]
 
         ided_pose_array.poses.append(ided_pose)
+
+        # else:
+        #     print('Skipped because prediction and filtered measurement were too far apart')
         
 
     for k in selected_xy_list:
