@@ -81,14 +81,14 @@ def pose_to_position_april(pose):
     Convert PoseArray message to a list of (x, y) positions.
     """
     #return (-pose.pose.position.z, -pose.pose.position.y) #Check why do I have to do this?
-    return (pose.pose.position.x, pose.pose.position.y)
+    return (pose.pose.position.x, pose.pose.position.y,pose.header.stamp.to_sec())
     #return (-pose.position.z, -pose.position.x)
     
 def pose_to_position(pose):
     """
     Convert PoseArray message to a list of (x, y) positions.
     """
-    return (pose.pose.position.x, pose.pose.position.y)
+    return (pose.pose.position.x, pose.pose.position.y,pose.header.stamp.to_sec())
 
 def update_trajectory(trajectory_dict, person_id, position):
     """
@@ -158,6 +158,10 @@ def plot_trajectories():
     num_rows = math.ceil(num_persons / 2)  # Adjust the number of rows based on the number of persons
     fig, axes = plt.subplots(num_rows, 2, figsize=(12, 6 * num_rows))  # Create subplots
     axes = axes.flatten()
+
+    mse_measured_actual = []
+    mse_kalman_actual = []
+
     #for person_id, measured_traj in measured_trajectories.items():
     for idx, (person_id, measured_traj) in enumerate(measured_trajectories.items()):
         print(person_id)
@@ -175,12 +179,12 @@ def plot_trajectories():
         kalman_color = color_cycle[(idx + 1) % len(color_cycle)]
         actual_color = color_cycle[(idx + 2) % len(color_cycle)]
         ax = axes[idx]
-        x, y = zip(*measured_traj)
-        ax.plot(x, y, label=f'Person {person_id} (Measured)', color=measured_color)
-        x, y = zip(*kalman_traj)
-        ax.plot(x, y, label=f'Person {person_id} (Kalman)', color=kalman_color, linestyle='dashed')
-        x, y = zip(*actual_traj)
-        ax.plot(x, y, label=f'Person {person_id} (Actual)', color=actual_color, linestyle='dotted')
+        measured_x, measured_y, measured_time = zip(*measured_traj)
+        ax.plot(measured_x, measured_y, label=f'Person {person_id} (Measured)', color=measured_color)
+        kalman_x, kalman_y, kalman_time = zip(*kalman_traj)
+        ax.plot(kalman_x, kalman_y, label=f'Person {person_id} (Kalman)', color=kalman_color, linestyle='dashed')
+        actual_x, actual_y, actual_time = zip(*actual_traj)
+        ax.plot(actual_x, actual_y, label=f'Person {person_id} (Actual)', color=actual_color, linestyle='dotted')
         
         #plt.plot(x, y, label=f'Person {person_id} (Measured)', color='blue')
         ax.set_xlabel('X')
@@ -190,6 +194,26 @@ def plot_trajectories():
         ax.grid(True)
         #plt.plot(x, y, label=f'Person {person_id} (Kalman)', color='red', linestyle='dashed')
         ax.plot(0,0,'o')
+
+        # Calculate MSE
+        def calculate_mse(traj1, traj2):
+            times1 = [t for _, _, t in traj1]
+            times2 = [t for _, _, t in traj2]
+            common_times = set(times1) & set(times2)
+            if not common_times:
+                return float('inf')
+
+            traj1_dict = {t: (x, y) for x, y, t in traj1}
+            traj2_dict = {t: (x, y) for x, y, t in traj2}
+            mse = np.mean([(traj1_dict[t][0] - traj2_dict[t][0])**2 + (traj1_dict[t][1] - traj2_dict[t][1])**2 for t in common_times])
+            return mse
+        
+        mse_measured_actual.append(calculate_mse(measured_traj, actual_traj))
+        mse_kalman_actual.append(calculate_mse(kalman_traj, actual_traj))
+
+
+    print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
+    print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
 
     plt.tight_layout()
     # plt.xlabel('X')
@@ -206,6 +230,9 @@ def plot_trajectories():
     # plt.clf()
     # plt.close()
     #plt.show()
+
+    print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
+    print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
 
 def visualization_markers(posearray,publisher):
 
