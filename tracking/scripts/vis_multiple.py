@@ -26,6 +26,8 @@ apriltag_path2=Path()
 measured_trajectories = {}
 kalman_trajectories = {}
 actual_trajectories = {}
+predicted_trajectories = {}
+
 
 
 
@@ -161,6 +163,7 @@ def plot_trajectories():
 
     mse_measured_actual = []
     mse_kalman_actual = []
+    mse_predicted_actual = []
 
     #for person_id, measured_traj in measured_trajectories.items():
     for idx, (person_id, measured_traj) in enumerate(measured_trajectories.items()):
@@ -169,22 +172,33 @@ def plot_trajectories():
         kalman_traj = kalman_trajectories.get(person_id, [])
         # actual_traj = actual_trajectories.get(2, []) #change this part. Its been hard coded
         actual_traj = actual_trajectories.get(person_id, []) #change this part. Its been hard coded
+        predicted_traj = predicted_trajectories.get(person_id, [])
         print('actual_traj',actual_traj)
+
         if not actual_traj:
             print("The trajectory list is empty. Cannot plot trajectories.")
             continue
-        if(len(kalman_traj)==0):
+        if(len(kalman_traj)==0 and len(predicted_traj)==0):
             continue
+
         measured_color = color_cycle[idx % len(color_cycle)]  # Cycle through colors for different persons
         kalman_color = color_cycle[(idx + 1) % len(color_cycle)]
         actual_color = color_cycle[(idx + 2) % len(color_cycle)]
+        predicted_color = color_cycle[(idx + 3) % len(color_cycle)]
         ax = axes[idx]
-        measured_x, measured_y, measured_time = zip(*measured_traj)
-        ax.plot(measured_x, measured_y, label=f'Person {person_id} (Measured)', color=measured_color)
-        kalman_x, kalman_y, kalman_time = zip(*kalman_traj)
-        ax.plot(kalman_x, kalman_y, label=f'Person {person_id} (Kalman)', color=kalman_color, linestyle='dashed')
-        actual_x, actual_y, actual_time = zip(*actual_traj)
-        ax.plot(actual_x, actual_y, label=f'Person {person_id} (Actual)', color=actual_color, linestyle='dotted')
+
+        if measured_traj:
+            measured_x, measured_y, measured_time = zip(*measured_traj)
+            ax.plot(measured_x, measured_y, label=f'Person {person_id} (Measured)', color=measured_color)
+        if kalman_traj:
+            kalman_x, kalman_y, kalman_time = zip(*kalman_traj)
+            ax.plot(kalman_x, kalman_y, label=f'Person {person_id} (Kalman)', color=kalman_color, linestyle='dashed')
+        if actual_traj:    
+            actual_x, actual_y, actual_time = zip(*actual_traj)
+            ax.plot(actual_x, actual_y, label=f'Person {person_id} (Actual)', color=actual_color, linestyle='dotted')
+        if predicted_traj:
+            predicted_x, predicted_y, predicted_time = zip(*predicted_traj)
+            ax.plot(predicted_x, predicted_y, label=f'Person {person_id} (Predicted)', color=predicted_color, linestyle='dashdot')
         
         #plt.plot(x, y, label=f'Person {person_id} (Measured)', color='blue')
         ax.set_xlabel('X')
@@ -210,10 +224,12 @@ def plot_trajectories():
         
         mse_measured_actual.append(calculate_mse(measured_traj, actual_traj))
         mse_kalman_actual.append(calculate_mse(kalman_traj, actual_traj))
+        mse_predicted_actual.append(calculate_mse(predicted_traj, actual_traj))
 
 
     print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
     print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
+    print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
 
     plt.tight_layout()
     # plt.xlabel('X')
@@ -233,6 +249,7 @@ def plot_trajectories():
 
     print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
     print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
+    print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
 
 def visualization_markers(posearray,publisher):
 
@@ -297,6 +314,14 @@ def kalman_callback(pose_array):
 
 #     kalman_path_pub.publish(kalman_path)
 
+def predicted_callback(pose_array):
+    visualization_markers(pose_array, predicted_markerarray_pub)
+    for pose in pose_array.poses:
+        person_id = pose.ID
+        position = pose_to_position(pose)
+        update_trajectory(predicted_trajectories, person_id, position)
+    # Optionally, you can call plot_trajectories() here to update the plots in real-time
+    # plot_trajectories()
 
 
 def measured_callback(pose_array):
@@ -344,7 +369,7 @@ def measured_pathmaker(pose,measured_path,measured_path_pub):
 
 
 def main():
-    global kalman_path_pub1,kalman_path_pub2,measured_path_pub1,measured_path_pub2,measured_markerarray_pub,kalman_markerarray_pub
+    global kalman_path_pub1,kalman_path_pub2,measured_path_pub1,measured_path_pub2,measured_markerarray_pub,kalman_markerarray_pub,predicted_markerarray_pub
     rospy.init_node('Visualisation_Node')
     print('Visualisation started')
 
@@ -353,6 +378,8 @@ def main():
     measured_pose_sub = rospy.Subscriber('/Measurements',PoseIDArray,measured_callback)
 
     apriltag_pose_sub = rospy.Subscriber('/ground_truth',PoseIDArray,apriltag_callback)
+
+    predicted_pose_sub = rospy.Subscriber('/PredictedPoses', PoseIDArray, predicted_callback) 
 
     apriltag_path_pub1=rospy.Publisher('/apriltag_path1',Path,queue_size=20)
     apriltag_path_pub2=rospy.Publisher('/apriltag_path2',Path,queue_size=20)    
@@ -366,6 +393,7 @@ def main():
 
     measured_markerarray_pub=rospy.Publisher('/measured_markers',MarkerArray,queue_size=20)
     kalman_markerarray_pub=rospy.Publisher('/kalman_markers',MarkerArray,queue_size=20)
+    predicted_markerarray_pub = rospy.Publisher('/predicted_markers', MarkerArray, queue_size=20)  # New publisher
 
     rospy.on_shutdown(plot_trajectories)
 
