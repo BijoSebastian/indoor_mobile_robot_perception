@@ -13,6 +13,7 @@ from nav_msgs.msg import Path
 from tracking.msg import PoseIDArray,PoseID
 from std_msgs.msg import Header
 import time
+
 from sensor_msgs.msg import LaserScan
 
 #Object Initialization
@@ -175,9 +176,9 @@ class person:
         
         return g
 
-    def prediction(self,delt):
+    def prediction(self):
     
-        #delt=self.ctime-self.ptime
+        delt=self.ctime-self.ptime
         x_pred,x_prev=person.g(self,delt)
         G=person.compute_G(self,delt)
         p_pred=np.matmul(np.matmul(G,self.P),(G.transpose()))
@@ -214,8 +215,11 @@ class person:
 
 def callback(msg):
     
-    global trackingstarted,iterations,kalmanpredpose_array
+    global trackingstarted,iterations,present_time,first_callback_received#,kalmanpredpose_array
     print("CALLBACK ACTIVATED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
+    
+
 
     prediction_time_nsec=msg.header.stamp.to_nsec()
     prediction_time_sec=prediction_time_nsec*(10**(-9))
@@ -230,8 +234,8 @@ def callback(msg):
 
     kalmanpose_array=PoseIDArray()
     kalmanpose_array.header= Header(stamp=present_time,frame_id='base_frame')
-    kalmanpredpose_array=PoseIDArray()
-    kalmanpredpose_array.header= Header(stamp=present_time,frame_id='base_frame') #supposed to be predicted_time
+    # kalmanpredpose_array=PoseIDArray()
+    # kalmanpredpose_array.header= Header(stamp=present_time,frame_id='base_frame') #supposed to be predicted_time
     pose_list=[]
 
     for t in msg.poses:
@@ -317,26 +321,39 @@ def callback(msg):
     #     predpose.pose.position.y=i.Xc[1][0]
     #     kalmanpredpose_array.poses.append(predpose)
 
+    # if people:
+    #     i=people[0]
+    #     duration=i.ctime-i.ptime
+    #     increment = rospy.Duration(duration)
+    #     new_time = present_time + increment
+    #     kalmanpredpose_array.header= Header(stamp=new_time,frame_id='base_frame') 
+
     kalman_pose_pub.publish(kalmanpose_array)
+
+    if not first_callback_received:
+        first_callback_received = True
     #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
-def scan_callback(scan):
-    global people
+def publish_predictions():
 
-    current_time=scan.header.stamp
-    current_time=current_time.to_nsec()*(10**(-9)) #Time in seconds
-
+    global first_callback_received,kalmanpredpose_array,time_elapsed,people
+    #print('Periodic prediction!')
+    # if not first_callback_received:
+    #     continue
+    
+    
     kalmanpredpose_array=PoseIDArray()
-    kalmanpredpose_array.header= Header(stamp=current_time,frame_id='base_frame') #supposed to be predicted_time
+    kalmanpredpose_array.header= Header(stamp=present_time,frame_id='base_frame') #supposed to be predicted_time
+    #print("TIMER ACTIVATED PREDICTION")
 
     if people:
         for i in people:
             print("PREDICTING...")
-            time_elapsed=current_time-i.ctime
-            print('time_elapsed',time_elapsed)
+            time_elapsed=(rospy.Time.now().to_nsec())*(10**(-9))-i.ctime
+            print('rospy.get_time():',rospy.Time.now())
             print('i.ctime:',i.ctime)
             print('Time elapsed:',time_elapsed)
-            i.prediction(time_elapsed)
+            i.prediction()
             print('ID:', i.id)
             print('Xc:', i.Xc)
             predpose = PoseID()
@@ -345,30 +362,51 @@ def scan_callback(scan):
             predpose.pose.position.y = i.Xc[1][0]
             kalmanpredpose_array.poses.append(predpose)
 
-        if people:
-            i=people[0]
-            duration=time_elapsed
-            increment = rospy.Duration(duration)
-            new_time = scan.header.stamp + increment
-            kalmanpredpose_array.header= Header(stamp=new_time,frame_id='base_frame') 
+    if people:
+        i=people[0]
+        duration=time_elapsed
+        increment = rospy.Duration(duration)
+        new_time = present_time + increment
+        kalmanpredpose_array.header= Header(stamp=new_time,frame_id='base_frame') 
 
-        kalman_predicted_pose_pub.publish(kalmanpredpose_array)
+    kalman_predicted_pose_pub.publish(kalmanpredpose_array)
+
 
 def main():
-    global kalman_pose_pub,kalman_predicted_pose_pub,people
+    global kalman_pose_pub,kalman_predicted_pose_pub,people,time_elapsed,first_callback_received,present_time
 
-    #Initial Condition    
+    #Initial Condition  
+    print('start')  
+    rospy.init_node('Kalman_filter')
 
     people=[]
+    time_elapsed=0
+    first_callback_received=False
+    present_time = rospy.Time.now()
+    print('present_time:',present_time)
     
-    rospy.init_node('Kalman_filter')
+    
     measurement_sub = rospy.Subscriber('/Measurements', PoseIDArray, callback)
 
-    scan_sub = rospy.Subscriber('/scan', LaserScan, scan_callback)
+    scan_sub=rospy.Subscriber('/scan', LaserScan, scan_callback)
 
     kalman_pose_pub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=10)
 
     kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=10)
+
+    # rate = rospy.Rate(10)
+
+    # while rospy.Time.now() == rospy.Time(0):
+    #     rospy.sleep(0.1)
+
+    # while not rospy.is_shutdown():
+        
+    #     #print('hello')
+    #     publish_predictions()
+    #     #print('heehe')
+    # rate.sleep()
+
+    #rospy.Timer(rospy.Duration(0.1), publish_predictions)
     
 
     rospy.spin()
@@ -377,3 +415,5 @@ def main():
 if __name__ == '__main__':
     main()
 
+
+#Use image callack
