@@ -28,7 +28,8 @@ kalman_trajectories = {}
 actual_trajectories = {}
 predicted_trajectories = {}
 
-
+# Define tolerance for time matching (e.g., 0.1 seconds)
+TIME_TOLERANCE = 0.1
 
 
 
@@ -101,6 +102,30 @@ def update_trajectory(trajectory_dict, person_id, position):
     trajectory_dict[person_id].append(position)
 
 
+
+def find_matching_times(times1, times2, tolerance):
+    """
+    Find the nearest timestamps within a certain tolerance.
+    """
+    matching_pairs = []
+
+    for t1 in times1:
+        min_diff = float('inf')
+        best_match = None
+        
+        for t2 in times2:
+            diff = abs(t1 - t2)
+            
+            if diff <= tolerance:
+                if diff < min_diff:
+                    min_diff = diff
+                    best_match = t2
+
+        if best_match is not None:
+            matching_pairs.append((t1, best_match))
+
+    return matching_pairs
+
 # def plot_trajectories():
 #     """
 #     Plot trajectories of all persons.
@@ -158,22 +183,34 @@ def plot_trajectories():
     color_cycle = plt.cm.tab10.colors
     num_persons = len(measured_trajectories)
     num_rows = math.ceil(num_persons / 2)  # Adjust the number of rows based on the number of persons
-    fig, axes = plt.subplots(num_rows, 2, figsize=(12, 6 * num_rows))  # Create subplots
+    fig, axes = plt.subplots(num_rows+1, 2, figsize=(12, 6 * (num_rows+1)))  # Create subplots
     axes = axes.flatten()
 
     mse_measured_actual = []
     mse_kalman_actual = []
     mse_predicted_actual = []
+    time_measured_actual = []
+    time_kalman_actual = []
+
+    def calculate_error_over_time(traj1, traj2):
+            times1 = [t for _, _, t in traj1]
+            times2 = [t for _, _, t in traj2]
+            matching_pairs = find_matching_times(times1, times2, TIME_TOLERANCE)
+            if not matching_pairs:
+                return [], []
+
+            traj1_dict = {t: (x, y) for x, y, t in traj1}
+            traj2_dict = {t: (x, y) for x, y, t in traj2}
+            errors = [(traj1_dict[t1][0] - traj2_dict[t2][0])**2 + (traj1_dict[t1][1] - traj2_dict[t2][1])**2
+                      for t1, t2 in matching_pairs]
+            return errors, [t1 for t1, _ in matching_pairs]
 
     #for person_id, measured_traj in measured_trajectories.items():
     for idx, (person_id, measured_traj) in enumerate(measured_trajectories.items()):
-        print(person_id)
-        #print('actual_trajectories:',actual_trajectories)
+        
         kalman_traj = kalman_trajectories.get(person_id, [])
-        # actual_traj = actual_trajectories.get(2, []) #change this part. Its been hard coded
-        actual_traj = actual_trajectories.get(person_id, []) #change this part. Its been hard coded
+        actual_traj = actual_trajectories.get(person_id, []) 
         predicted_traj = predicted_trajectories.get(person_id, [])
-        print('actual_traj',actual_traj)
 
         if not actual_traj:
             print("The trajectory list is empty. Cannot plot trajectories.")
@@ -210,26 +247,64 @@ def plot_trajectories():
         ax.plot(0,0,'o')
 
         # Calculate MSE
-        def calculate_mse(traj1, traj2):
-            times1 = [t for _, _, t in traj1]
-            times2 = [t for _, _, t in traj2]
-            common_times = set(times1) & set(times2)
-            if not common_times:
-                return float('inf')
+        # def calculate_mse(traj1, traj2):
+        #     times1 = [t for _, _, t in traj1]
+        #     times2 = [t for _, _, t in traj2]
+        #     common_times = set(times1) & set(times2)
+        #     if not common_times:
+        #         return float('inf')
 
-            traj1_dict = {t: (x, y) for x, y, t in traj1}
-            traj2_dict = {t: (x, y) for x, y, t in traj2}
-            mse = np.mean([(traj1_dict[t][0] - traj2_dict[t][0])**2 + (traj1_dict[t][1] - traj2_dict[t][1])**2 for t in common_times])
-            return mse
+        #     traj1_dict = {t: (x, y) for x, y, t in traj1}
+        #     traj2_dict = {t: (x, y) for x, y, t in traj2}
+        #     mse = np.mean([(traj1_dict[t][0] - traj2_dict[t][0])**2 + (traj1_dict[t][1] - traj2_dict[t][1])**2 for t in common_times])
+        #     return mse
+
         
-        mse_measured_actual.append(calculate_mse(measured_traj, actual_traj))
-        mse_kalman_actual.append(calculate_mse(kalman_traj, actual_traj))
-        mse_predicted_actual.append(calculate_mse(predicted_traj, actual_traj))
+        
+        measured_errors, measured_times = calculate_error_over_time(measured_traj, actual_traj)
+        kalman_errors, kalman_times = calculate_error_over_time(kalman_traj, actual_traj)
+        print('measured_traj:',measured_traj)
+
+        mse_measured_actual.extend(measured_errors)
+        mse_kalman_actual.extend(kalman_errors)
+        time_measured_actual.extend(measured_times)
+        time_kalman_actual.extend(kalman_times)
+
+            # Plotting error over time as a subplot
+    error_ax_measured = axes[-2]  # Use the second last subplot for measured errors
+    error_ax_kalman = axes[-1]  # Use the last subplot for Kalman errors
+
+    print('Length of time_measured_actual:',len(time_measured_actual))
+    print('Length of mse_measured_actual:',len(mse_measured_actual))
+
+    if time_measured_actual and mse_measured_actual:
+        error_ax_measured.plot(time_measured_actual, mse_measured_actual, label='Error (Measured vs Actual)', color='green')
+        error_ax_measured.set_xlabel('Time (seconds)')
+        error_ax_measured.set_ylabel('Mean Square Error')
+        error_ax_measured.set_title('Error Over Time (Measured vs Actual)')
+        error_ax_measured.legend()
+        error_ax_measured.grid(True)
+
+    print('Length of time_kalman_actual:',len(time_kalman_actual))
+    print('Length of mse_kalman_actual:',len(mse_kalman_actual))
+
+    if time_kalman_actual and mse_kalman_actual:
+        print('Plotting error vs time')
+        error_ax_kalman.plot(time_kalman_actual, mse_kalman_actual, label='Error (Kalman vs Actual)', color='purple')
+        error_ax_kalman.set_xlabel('Time (seconds)')
+        error_ax_kalman.set_ylabel('Mean Square Error')
+        error_ax_kalman.set_title('Error Over Time (Kalman vs Actual)')
+        error_ax_kalman.legend()
+        error_ax_kalman.grid(True)
+        
+        # mse_measured_actual.append(calculate_mse(measured_traj, actual_traj))
+        # mse_kalman_actual.append(calculate_mse(kalman_traj, actual_traj))
+        # mse_predicted_actual.append(calculate_mse(predicted_traj, actual_traj))
 
 
-    print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
-    print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
-    print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
+    # print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
+    # print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
+    # print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
 
     plt.tight_layout()
     # plt.xlabel('X')
@@ -247,9 +322,26 @@ def plot_trajectories():
     # plt.close()
     #plt.show()
 
+    # Plotting error over time
+    # plt.figure(figsize=(12, 6))
+    # if time_measured_actual and mse_measured_actual:
+    #     plt.plot(time_measured_actual, mse_measured_actual, label='Error (Measured vs Actual)', color='green')
+    # if time_kalman_actual and mse_kalman_actual:
+    #     plt.plot(time_kalman_actual, mse_kalman_actual, label='Error (Kalman vs Actual)', color='purple')
+
+    # plt.xlabel('Time (seconds)')
+    # plt.ylabel('Mean Square Error')
+    # plt.title('Error Over Time')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+
     print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
     print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
-    print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
+
+    # print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
+    # print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
+    # print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
 
 def visualization_markers(posearray,publisher):
 
@@ -328,6 +420,11 @@ def measured_callback(pose_array):
     # measured_pathmaker(pose_array.poses[0],measured_path1,measured_path_pub1)
     # measured_pathmaker(pose_array.poses[1],measured_path2,measured_path_pub2)
     visualization_markers(pose_array,measured_markerarray_pub)
+    try:
+        pose_array.poses[0].header.stamp=pose_array.header.stamp
+    except Exception as err:
+        print("ERROR in visualization pose array header assignment:")
+        print(err)
     for pose in pose_array.poses:
         position = pose_to_position(pose)
         update_trajectory(measured_trajectories, pose.ID, position)
@@ -340,11 +437,18 @@ def apriltag_callback(pose_array):
         person_id = pose.ID
         #print(f'$$$$Person id:{person_id}$$$$')
         #print('person id:',person_id)
-        if person_id == 13: #CHANGE THIS TO 12 FOR 2 PEOPLE ROSBAG
-            person_id=3
-            #print('Person id is 13')
-        if person_id == 12:
+        if person_id == 12: #FOR 2 PEOPLE ROSBAG
             person_id=2
+            #print('Person id is 13')
+        if person_id == 13:
+            person_id=3
+
+        # if person_id == 13: #FOR 1 PEOPLE ROSBAG
+        #     person_id = 2
+        #     #print('Person id is 13')
+        # if person_id == 12:
+        #     person_id=3
+
         position = pose_to_position_april(pose)
         update_trajectory(actual_trajectories, person_id, position)
         #print('UPDATING!')
