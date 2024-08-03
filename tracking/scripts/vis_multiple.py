@@ -186,8 +186,8 @@ def plot_trajectories():
     fig, axes = plt.subplots(num_rows+1, 2, figsize=(12, 6 * (num_rows+1)))  # Create subplots
     axes = axes.flatten()
 
-    mse_measured_actual = []
-    mse_kalman_actual = []
+    mse_measured_actual = {}
+    mse_kalman_actual = {}
     mse_predicted_actual = []
     time_measured_actual = []
     time_kalman_actual = []
@@ -238,8 +238,8 @@ def plot_trajectories():
             ax.plot(predicted_x, predicted_y, label=f'Person {person_id} (Predicted)', color=predicted_color, linestyle='dashdot')
         
         #plt.plot(x, y, label=f'Person {person_id} (Measured)', color='blue')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
+        ax.set_xlabel('X(metres)')
+        ax.set_ylabel('Y(metres)')
         ax.set_title(f'Trajectories of Person {person_id}')
         ax.legend()
         ax.grid(True)
@@ -259,89 +259,145 @@ def plot_trajectories():
         #     mse = np.mean([(traj1_dict[t][0] - traj2_dict[t][0])**2 + (traj1_dict[t][1] - traj2_dict[t][1])**2 for t in common_times])
         #     return mse
 
+        mse_measured_actual[person_id], _ = calculate_error_over_time(measured_traj, actual_traj)
+        mse_kalman_actual[person_id], _ = calculate_error_over_time(kalman_traj, actual_traj)
+        print('person id:',person_id)
+        print('kalman_traj:',kalman_traj)
+
+        # Plotting error over time for each person
+    ax_error_measured = axes[-2]  # Use the second last subplot for measured errors
+    ax_error_kalman = axes[-1]  # Use the last subplot for Kalman errors
         
-        
-        measured_errors, measured_times = calculate_error_over_time(measured_traj, actual_traj)
-        kalman_errors, kalman_times = calculate_error_over_time(kalman_traj, actual_traj)
-        print('measured_traj:',measured_traj)
+        # measured_errors, measured_times = calculate_error_over_time(measured_traj, actual_traj)
+        # kalman_errors, kalman_times = calculate_error_over_time(kalman_traj, actual_traj)
+        # print('measured_traj:',measured_traj)
+    
 
-        mse_measured_actual.extend(measured_errors)
-        mse_kalman_actual.extend(kalman_errors)
-        time_measured_actual.extend(measured_times)
-        time_kalman_actual.extend(kalman_times)
+    # Plotting error over time for each person
+    print('mse_kalman_actual:',mse_kalman_actual)
 
-            # Plotting error over time as a subplot
-    error_ax_measured = axes[-2]  # Use the second last subplot for measured errors
-    error_ax_kalman = axes[-1]  # Use the last subplot for Kalman errors
+    for person_id, errors in mse_measured_actual.items():
+        if errors:
+            times = [i for i in range(len(errors))]
+            ax_error_measured.plot(times, errors, label=f'Person {person_id} (Measured vs Actual)', linestyle='dashed')
 
-    print('Length of time_measured_actual:',len(time_measured_actual))
-    print('Length of mse_measured_actual:',len(mse_measured_actual))
+            max_error = np.max(errors)
+            min_error = np.min(errors)
+            mean_error = np.mean(errors)
+            # ax_error_measured.axhline(y=max_error, color='red', linestyle='--', label=f'Max Error({person_id})')
+            # ax_error_measured.axhline(y=min_error, color='green', linestyle='--', label=f'Min Error({person_id})')
+            ax_error_measured.axhline(y=mean_error, color='blue', linestyle='--', label=f'Mean Error({person_id})')
+            print('mean_error:',mean_error)
 
-    if time_measured_actual and mse_measured_actual:
-        error_ax_measured.plot(time_measured_actual, mse_measured_actual, label='Error (Measured vs Actual)', color='green')
-        error_ax_measured.set_xlabel('Time (seconds)')
-        error_ax_measured.set_ylabel('Mean Square Error')
-        error_ax_measured.set_title('Error Over Time (Measured vs Actual)')
-        error_ax_measured.legend()
-        error_ax_measured.grid(True)
+    for person_id, errors in mse_kalman_actual.items():
+        if errors:
+            times = [i for i in range(len(errors))]
+            ax_error_kalman.plot(times, errors, label=f'Person {person_id} (Kalman vs Actual)', linestyle='dashed')
 
-    print('Length of time_kalman_actual:',len(time_kalman_actual))
-    print('Length of mse_kalman_actual:',len(mse_kalman_actual))
+            max_error = np.max(errors)
+            min_error = np.min(errors)
+            mean_error = np.mean(errors)
+            # ax_error_kalman.axhline(y=max_error, color='red', linestyle='--', label=f'Max Error({person_id})')
+            # ax_error_kalman.axhline(y=min_error, color='green', linestyle='--', label=f'Min Error({person_id})')
+            ax_error_kalman.axhline(y=mean_error, color='blue', linestyle='--', label=f'Mean Error({person_id})')
+            print('mean_error:',mean_error)
 
-    if time_kalman_actual and mse_kalman_actual:
-        print('Plotting error vs time')
-        error_ax_kalman.plot(time_kalman_actual, mse_kalman_actual, label='Error (Kalman vs Actual)', color='purple')
-        error_ax_kalman.set_xlabel('Time (seconds)')
-        error_ax_kalman.set_ylabel('Mean Square Error')
-        error_ax_kalman.set_title('Error Over Time (Kalman vs Actual)')
-        error_ax_kalman.legend()
-        error_ax_kalman.grid(True)
-        
-        # mse_measured_actual.append(calculate_mse(measured_traj, actual_traj))
-        # mse_kalman_actual.append(calculate_mse(kalman_traj, actual_traj))
-        # mse_predicted_actual.append(calculate_mse(predicted_traj, actual_traj))
+    ax_error_measured.set_xlabel('Time (indices)')
+    ax_error_measured.set_ylabel('Mean Square Error')
+    ax_error_measured.set_title('Error Over Time (Measured vs Actual)')
+    ax_error_measured.legend(framealpha=0.1)
+    ax_error_measured.grid(True)
 
-
-    # print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
-    # print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
-    # print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
+    ax_error_kalman.set_xlabel('Time (indices)')
+    ax_error_kalman.set_ylabel('Mean Square Error')
+    ax_error_kalman.set_title('Error Over Time (Kalman vs Actual)')
+    ax_error_kalman.legend(framealpha=0.1)
+    ax_error_kalman.grid(True)
 
     plt.tight_layout()
-    # plt.xlabel('X')
-    # plt.ylabel('Y')
-    # plt.title('Trajectories of Persons')
-    # plt.legend()
-    #plt.grid(True)
-    #plt.savefig('person_path.png')
-    
     plt.show()
     plt.pause(10)
 
-    # plt.pause(0.001)
-    # plt.clf()
-    # plt.close()
-    #plt.show()
+    print(f'MSE (Measured vs Actual): {mse_measured_actual}')
+    print(f'MSE (Kalman vs Actual): {mse_kalman_actual}')
 
-    # Plotting error over time
-    # plt.figure(figsize=(12, 6))
+    #     mse_measured_actual.extend(measured_errors)
+    #     mse_kalman_actual.extend(kalman_errors)
+    #     time_measured_actual.extend(measured_times)
+    #     time_kalman_actual.extend(kalman_times)
+
+    #         # Plotting error over time as a subplot
+    # error_ax_measured = axes[-2]  # Use the second last subplot for measured errors
+    # error_ax_kalman = axes[-1]  # Use the last subplot for Kalman errors
+
+    # print('Length of time_measured_actual:',len(time_measured_actual))
+    # print('Length of mse_measured_actual:',len(mse_measured_actual))
+
     # if time_measured_actual and mse_measured_actual:
-    #     plt.plot(time_measured_actual, mse_measured_actual, label='Error (Measured vs Actual)', color='green')
+    #     error_ax_measured.plot(time_measured_actual, mse_measured_actual, label='Error (Measured vs Actual)', color='green')
+    #     error_ax_measured.set_xlabel('Time (seconds)')
+    #     error_ax_measured.set_ylabel('Mean Square Error')
+    #     error_ax_measured.set_title('Error Over Time (Measured vs Actual)')
+    #     error_ax_measured.legend()
+    #     error_ax_measured.grid(True)
+
+    # print('Length of time_kalman_actual:',len(time_kalman_actual))
+    # print('Length of mse_kalman_actual:',len(mse_kalman_actual))
+
     # if time_kalman_actual and mse_kalman_actual:
-    #     plt.plot(time_kalman_actual, mse_kalman_actual, label='Error (Kalman vs Actual)', color='purple')
+    #     print('Plotting error vs time')
+    #     error_ax_kalman.plot(time_kalman_actual, mse_kalman_actual, label='Error (Kalman vs Actual)', color='purple')
+    #     error_ax_kalman.set_xlabel('Time (seconds)')
+    #     error_ax_kalman.set_ylabel('Mean Square Error')
+    #     error_ax_kalman.set_title('Error Over Time (Kalman vs Actual)')
+    #     error_ax_kalman.legend()
+    #     error_ax_kalman.grid(True)
+        
+    #     # mse_measured_actual.append(calculate_mse(measured_traj, actual_traj))
+    #     # mse_kalman_actual.append(calculate_mse(kalman_traj, actual_traj))
+    #     # mse_predicted_actual.append(calculate_mse(predicted_traj, actual_traj))
 
-    # plt.xlabel('Time (seconds)')
-    # plt.ylabel('Mean Square Error')
-    # plt.title('Error Over Time')
-    # plt.legend()
-    # plt.grid(True)
+
+    # # print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
+    # # print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
+    # # print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
+
+    # plt.tight_layout()
+    # # plt.xlabel('X')
+    # # plt.ylabel('Y')
+    # # plt.title('Trajectories of Persons')
+    # # plt.legend()
+    # #plt.grid(True)
+    # #plt.savefig('person_path.png')
+    
     # plt.show()
+    # plt.pause(10)
 
-    print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
-    print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
+    # # plt.pause(0.001)
+    # # plt.clf()
+    # # plt.close()
+    # #plt.show()
+
+    # # Plotting error over time
+    # # plt.figure(figsize=(12, 6))
+    # # if time_measured_actual and mse_measured_actual:
+    # #     plt.plot(time_measured_actual, mse_measured_actual, label='Error (Measured vs Actual)', color='green')
+    # # if time_kalman_actual and mse_kalman_actual:
+    # #     plt.plot(time_kalman_actual, mse_kalman_actual, label='Error (Kalman vs Actual)', color='purple')
+
+    # # plt.xlabel('Time (seconds)')
+    # # plt.ylabel('Mean Square Error')
+    # # plt.title('Error Over Time')
+    # # plt.legend()
+    # # plt.grid(True)
+    # # plt.show()
 
     # print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
     # print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
-    # print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
+
+    # # print(f'MSE (Measured vs Actual): {np.mean(mse_measured_actual)}')
+    # # print(f'MSE (Kalman vs Actual): {np.mean(mse_kalman_actual)}')
+    # # print(f'MSE (Predicted vs Actual): {np.mean(mse_predicted_actual)}')
 
 def visualization_markers(posearray,publisher):
 
@@ -437,17 +493,17 @@ def apriltag_callback(pose_array):
         person_id = pose.ID
         #print(f'$$$$Person id:{person_id}$$$$')
         #print('person id:',person_id)
-        if person_id == 12: #FOR 2 PEOPLE ROSBAG
-            person_id=2
-            #print('Person id is 13')
-        if person_id == 13:
-            person_id=3
-
-        # if person_id == 13: #FOR 1 PEOPLE ROSBAG
-        #     person_id = 2
+        # if person_id == 12: #FOR 2 PEOPLE ROSBAG
+        #     person_id=2
         #     #print('Person id is 13')
-        # if person_id == 12:
+        # if person_id == 13:
         #     person_id=3
+
+        if person_id == 13: #FOR 1 PEOPLE ROSBAG
+            person_id = 2
+            #print('Person id is 13')
+        if person_id == 12:
+            person_id=3
 
         position = pose_to_position_april(pose)
         update_trajectory(actual_trajectories, person_id, position)

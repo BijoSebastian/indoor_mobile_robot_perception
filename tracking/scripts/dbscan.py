@@ -30,7 +30,7 @@ from scipy.optimize import least_squares
 background_scan = None
 pose_lidar_pub = None
 first_time = True
-max_range = 4.0  # Set this to the maximum range of your lidar
+max_range = 4  # Set this to the maximum range of your lidar
 
 # Global Variables
 marker = Marker()
@@ -184,7 +184,7 @@ def callback(msg):
     difference = np.abs(current_scan - background_scan)
 
     # Set a threshold for considering the difference as a significant change
-    threshold = 0.2
+    threshold = 0.1
     significant_indices = np.where(difference > threshold)[0]
     
     pts_r = current_scan[significant_indices]

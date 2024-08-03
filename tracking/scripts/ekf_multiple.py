@@ -301,6 +301,7 @@ def callback(msg):
 
     for i in people:
         kalmanpose=PoseID()
+        kalmanpose.header.stamp=present_time
         kalmanpose.ID=i.id
         kalmanpose.pose.position.x=i.Xc[0][0]
         kalmanpose.pose.position.y=i.Xc[1][0]
