@@ -270,6 +270,9 @@ def callback(msg):
                 data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
 
                 hue='Cluster', palette='Set2', legend='full', s=10)
+        
+        plt.xlabel("X Position (meters)")
+        plt.ylabel("Y Position (meters)")
     
     
 
