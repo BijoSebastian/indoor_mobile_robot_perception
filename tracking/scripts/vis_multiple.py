@@ -276,9 +276,12 @@ def plot_trajectories():
     # Plotting error over time for each person
     print('mse_kalman_actual:',mse_kalman_actual)
 
+    colors = ['blue', 'orange', 'green', 'red', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+
     for person_id, errors in mse_measured_actual.items():
         if errors:
             times = [i for i in range(len(errors))]
+            
             ax_error_measured.plot(times, errors, label=f'Person {person_id} (Measured vs Actual)', linestyle='dashed')
 
             max_error = np.max(errors)
@@ -286,7 +289,9 @@ def plot_trajectories():
             mean_error = np.mean(errors)
             # ax_error_measured.axhline(y=max_error, color='red', linestyle='--', label=f'Max Error({person_id})')
             # ax_error_measured.axhline(y=min_error, color='green', linestyle='--', label=f'Min Error({person_id})')
-            ax_error_measured.axhline(y=mean_error, color='blue', linestyle='--', label=f'Mean Error({person_id})')
+            color = colors[person_id % len(colors)]
+
+            ax_error_measured.axhline(y=mean_error, color=color, linestyle='--', label=f'Mean Error({person_id})')
             print('mean_error:',mean_error)
 
     for person_id, errors in mse_kalman_actual.items():
@@ -299,7 +304,9 @@ def plot_trajectories():
             mean_error = np.mean(errors)
             # ax_error_kalman.axhline(y=max_error, color='red', linestyle='--', label=f'Max Error({person_id})')
             # ax_error_kalman.axhline(y=min_error, color='green', linestyle='--', label=f'Min Error({person_id})')
-            ax_error_kalman.axhline(y=mean_error, color='blue', linestyle='--', label=f'Mean Error({person_id})')
+            color = colors[person_id % len(colors)]
+            
+            ax_error_kalman.axhline(y=mean_error, color=color, linestyle='--', label=f'Mean Error({person_id})')
             print('mean_error:',mean_error)
 
     ax_error_measured.set_xlabel('Time (indices)')
@@ -500,10 +507,10 @@ def apriltag_callback(pose_array):
         #     person_id=3
 
         if person_id == 13: #FOR 1 PEOPLE ROSBAG
-            person_id = 2
+            person_id = 3 #changed for multiple4
             #print('Person id is 13')
         if person_id == 12:
-            person_id=3
+            person_id=2
 
         position = pose_to_position_april(pose)
         update_trajectory(actual_trajectories, person_id, position)

@@ -8,9 +8,10 @@ import matplotlib
 matplotlib.use('TkAgg')  # Use the TkAgg backend (or another suitable backend)
 
 import matplotlib.pyplot as plt
-import time
+
 from matplotlib.patches import Circle
 import cv2
+import time
 
 
 from sensor_msgs.msg import LaserScan
@@ -159,13 +160,34 @@ def visualization_point(center):
 
 def filter_infs(scan):
     return np.array([min(r, max_range) if not np.isinf(r) else max_range for r in scan])
- 
+
+def sliding_window_fit_circles(points, window_size=10):
+    fitted_circles = []
+
+    # Iterate over the point cloud with a sliding window
+    for i in range(len(points) - window_size + 1):
+        window = points[i:i + window_size]
+        
+        # Fit a circle to the points in the window
+        x = window[:, 0]
+        y = window[:, 1]
+
+        x_avg=np.mean(np.array(x))
+        y_avg=np.mean(np.array(y))
+        
+        if len(x) >= 3:  # Ensure there are at least 3 points to fit a circle
+            center, radius = fit_circle(x, y)
+            # print('center',center)
+            # print('x_avg,y_avg:',(x_avg,y_avg))
+            center = [x_avg,y_avg]
+            fitted_circles.append([center, radius])
+    
+    return fitted_circles
+
 
 def callback(msg):
     # Getting the polar coordinates of the point cloud
     global pose,first_time,t0,firstplottime,ax,fig,background_scan
-    
-    #entertime=time.time()
 
     current_scan = filter_infs(np.array(msg.ranges))
 
@@ -176,6 +198,8 @@ def callback(msg):
         rospy.loginfo("Background scan stored")
         first_time=False
         return
+
+    entertime=time.time()
 
     ptime_stamp=msg.header.stamp
     t_now=ptime_stamp.to_nsec()*(10**(-9))
@@ -206,108 +230,75 @@ def callback(msg):
             newscan_polar.append([r,ang])
             newscan_rect.append(polartorect([r, ang]))
 
-    #We now have the scan in 1m radius. In polar as well as in rect.
-
-    #Performing clustering
-
-
-    df = pd.DataFrame(newscan_rect, columns =['x', 'y'])
-    try:
-        clustering = DBSCAN(eps=0.1, min_samples=3).fit(df)
-
+    #We now have the scan within radius. In polar as well as in rect.
     
+    # Sliding window circle fitting
+    fitted_circles = sliding_window_fit_circles(np.array(newscan_rect), window_size=5)
 
-        DBSCAN_dataset = df.copy()
-
-        DBSCAN_dataset.loc[:,'Cluster'] = clustering.labels_ 
-
-        DBSCAN_dataset.Cluster.value_counts().to_frame()
-
-        outliers = DBSCAN_dataset[DBSCAN_dataset['Cluster']==-1]
-
-        cluster=DBSCAN_dataset[DBSCAN_dataset['Cluster']==0]
+    people=[]
+    people_fitted_circles=[]
+    for p in fitted_circles:
         
-        clusters = []
-        # Loop through clusters
-        for label in DBSCAN_dataset['Cluster'].unique():
-            if label == -1:
-                # Skip outliers
-                continue
-            cluster = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
-            clusters.append(cluster[['x', 'y']].values)
+        if(p[1]<0.2 and p[1]>0.01):
+            people.append(list(p[0])) #should nt we actually be publishingn the ag of the cluster/window
+            people_fitted_circles.append(p)
+        #people.append(p)
+    lidar_poses=PoseArray()
 
-        #Fit clusters into circles
-        try:
-            fitted_circles = fit_clusters_into_circles2(clusters) #It ll say some serialization error
-            #fitted_circles=avg_cluster(clusters) #remove later
-        except:
-            print("!!!!There is error in fitting circle!!!!")
+    #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
+    lidar_poses.header = Header(stamp=ptime_stamp, frame_id="map")
 
-        people=[]
-        for p in fitted_circles:
-            
-            if(p[1]<0.2 and p[1]>0.01):
-                people.append(list(p[0]))
-            #people.append(p)
-        lidar_poses=PoseArray()
+    
+    for k in people:
+        lidar_pose=Pose()
+        #lidar_pose.header = Header(stamp=rospy.Time.now(), frame_id="base_frame")
+        lidar_pose.position.x,lidar_pose.position.y=k#list(k[0])
 
-        #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
-        lidar_poses.header = Header(stamp=ptime_stamp, frame_id="map")
+        lidar_poses.poses.append(lidar_pose)
 
+    # if(firstplottime):
+    #     fig, ax = plt.subplots()
+    #     ax.set_xlim(-10, 10)  # Set X axis limits to a fixed range
+    #     ax.set_ylim(-10, 10)  # Set Y axis limits to a fixed range
+    #     firstplottime=False
+
+    # ax.clear()
+
+    # #print(np.array(newscan_rect)[:,0])
+    # ax.scatter(np.array(newscan_rect)[:,0], np.array(newscan_rect)[:,1], s=5, c='red', label='Points')
+
+    
+    # ax.set_xlabel("X Position (meters)")
+    # ax.set_ylabel("Y Position (meters)")
+
+    # ax.plot(0,0,'o')
+
+    # for i in people_fitted_circles:
+    #     circle = Circle(list(i[0]), i[1],fill=False)
+    #     ax.add_patch(circle)
         
-        for k in people:
-            lidar_pose=Pose()
-            #lidar_pose.header = Header(stamp=rospy.Time.now(), frame_id="base_frame")
-            lidar_pose.position.x,lidar_pose.position.y=k#list(k[0])
 
-            lidar_poses.poses.append(lidar_pose)
+    # # ax.set_xlim(-10,10)
+    # # ax.set_ylim(-10,10)
 
-        if(firstplottime):
-            fig, ax = plt.subplots()
-            firstplottime=False
+    # plt.show(block=False)
+
+    # plt.pause(0.001)
 
 
-        sns.scatterplot(x='x', y='y',
+    # plt.clf()
+    # plt.close(fig)
 
-                data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
+    # except Exception as error:
 
-                hue='Cluster', palette='Set2', legend='full', s=20)
-        
-        plt.xlabel("X Position (meters)")
-        plt.ylabel("Y Position (meters)")
-    
-    
-
-    
-        plt.plot(0,0,'o')
-
-        for i in fitted_circles:
-            circle = Circle(list(i[0]), i[1],fill=False)
-            plt.gca().add_patch(circle)
-            
-    
-        ax.set_xlim(-5,5)
-        ax.set_ylim(-5,5)
-    
-        plt.show(block=False)
-
-        plt.pause(0.001)
-        plt.clf()
-        plt.close(fig)
-
-    except Exception as error:
-
-        lidar_poses.poses=[]
-        print('!!!!There is error in clustering:',error)
+    #     lidar_poses.poses=[]
+    #     print('!!!!There is error in clustering:',error)
         
     after_clustering_time=rospy.Time.now()
     after_clustering_time_sec=after_clustering_time.to_nsec()*(10**(-9))
     time_elapse=after_clustering_time_sec-before_clustering_time_sec
-    
-    #exittime=time.time()
-    
-    #print('time taken:',exittime-entertime)
-    
+    exittime=time.time()
+    print('time taken:',exittime-entertime)
     pose_lidar_pub.publish(lidar_poses)
 
     
