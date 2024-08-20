@@ -188,6 +188,8 @@ def plot_trajectories():
 
     mse_measured_actual = {}
     mse_kalman_actual = {}
+    mse_measured_actual_time = {}
+    mse_kalman_actual_time = {}
     mse_predicted_actual = []
     time_measured_actual = []
     time_kalman_actual = []
@@ -259,8 +261,8 @@ def plot_trajectories():
         #     mse = np.mean([(traj1_dict[t][0] - traj2_dict[t][0])**2 + (traj1_dict[t][1] - traj2_dict[t][1])**2 for t in common_times])
         #     return mse
 
-        mse_measured_actual[person_id], _ = calculate_error_over_time(measured_traj, actual_traj)
-        mse_kalman_actual[person_id], _ = calculate_error_over_time(kalman_traj, actual_traj)
+        mse_measured_actual[person_id], mse_measured_actual_time[person_id] = calculate_error_over_time(measured_traj, actual_traj)
+        mse_kalman_actual[person_id], mse_kalman_actual_time[person_id] = calculate_error_over_time(kalman_traj, actual_traj)
         print('person id:',person_id)
         print('kalman_traj:',kalman_traj)
 
@@ -280,8 +282,8 @@ def plot_trajectories():
 
     for person_id, errors in mse_measured_actual.items():
         if errors:
-            times = [i for i in range(len(errors))]
-            
+            #times = [i for i in range(len(errors))]
+            times = [t for t in mse_measured_actual_time[person_id]]
             ax_error_measured.plot(times, errors, label=f'Person {person_id} (Measured vs Actual)', linestyle='dashed')
 
             max_error = np.max(errors)
@@ -296,7 +298,8 @@ def plot_trajectories():
 
     for person_id, errors in mse_kalman_actual.items():
         if errors:
-            times = [i for i in range(len(errors))]
+            #times = [i for i in range(len(errors))]
+            times = [t for t in mse_kalman_actual_time[person_id]]
             ax_error_kalman.plot(times, errors, label=f'Person {person_id} (Kalman vs Actual)', linestyle='dashed')
 
             max_error = np.max(errors)
@@ -309,14 +312,14 @@ def plot_trajectories():
             ax_error_kalman.axhline(y=mean_error, color=color, linestyle='--', label=f'Mean Error({person_id})')
             print('mean_error:',mean_error)
 
-    ax_error_measured.set_xlabel('Time (indices)')
-    ax_error_measured.set_ylabel('Mean Square Error')
+    ax_error_measured.set_xlabel('Time (Seconds)')
+    ax_error_measured.set_ylabel('Error (m$^2$)')
     ax_error_measured.set_title('Error Over Time (Measured vs Actual)')
     ax_error_measured.legend(framealpha=0.1)
     ax_error_measured.grid(True)
 
-    ax_error_kalman.set_xlabel('Time (indices)')
-    ax_error_kalman.set_ylabel('Mean Square Error')
+    ax_error_kalman.set_xlabel('Time (Seconds)')
+    ax_error_kalman.set_ylabel('Error (m$^2$)')
     ax_error_kalman.set_title('Error Over Time (Kalman vs Actual)')
     ax_error_kalman.legend(framealpha=0.1)
     ax_error_kalman.grid(True)
