@@ -37,24 +37,7 @@ def Object_detection_yolo(image):
 
     print("YOLO LOADED")
 
-
-
-    #cap= cv2.VideoCapture(2)
-
-    # while not rospy.is_shutdown():
-
     img= bridge.imgmsg_to_cv2(image)
-
-    # cv2.imshow('cam_view',img)
-    # cv2.waitKey(1)
-
-    # if not ret:
-
-    #     break
-
-    # image_msg = bridge.cv2_to_imgmsg(img, encoding="bgr8")
-    # image_pub.publish(image_msg)
-
 
     height= img.shape[0]
 
@@ -100,15 +83,11 @@ def Object_detection_yolo(image):
 
                 h = int(detection[3] * height)
 
-
-
                 # Rectangle coordinates
 
                 x = int(center_x - w / 2)
 
                 y = int(center_y - h / 2)
-
-
 
                 boxes.append([x, y, w, h])
 

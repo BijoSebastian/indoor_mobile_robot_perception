@@ -6,22 +6,17 @@ from sklearn.cluster import DBSCAN
 import seaborn as sns
 import matplotlib
 matplotlib.use('TkAgg')  # Use the TkAgg backend (or another suitable backend)
-
 import matplotlib.pyplot as plt
 import time
 from matplotlib.patches import Circle
 import cv2
-
-
 from sensor_msgs.msg import LaserScan
 import math
 import numpy as np
-
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Point
 from nav_msgs.msg import Path
 from geometry_msgs.msg import Pose,PoseArray
-
 from std_msgs.msg import Header
 from scipy.optimize import least_squares
 
@@ -46,7 +41,6 @@ def fit_circle(x, y):
     k_guess = np.mean(y)  # Mean of y coordinates
     r_guess = np.max(np.sqrt((x - h_guess)**2 + (y - k_guess)**2))  # Max distance from center
     initial_guess = [h_guess, k_guess, r_guess]
-    # initial_guess = [0, 0, 1]  # Initial guess for (h, k, r)
     result = least_squares(circle_residuals, initial_guess, args=(x, y))
     h, k, r = result.x
     return [h, k], r
@@ -213,7 +207,7 @@ def callback(msg):
 
     df = pd.DataFrame(newscan_rect, columns =['x', 'y'])
     try:
-        clustering = DBSCAN(eps=0.1, min_samples=3).fit(df)
+        clustering = DBSCAN(eps=0.05, min_samples=3).fit(df)
 
     
 
@@ -316,6 +310,7 @@ def callback(msg):
 def main():
 
     global visualpub,pose_lidar_pub,first_time,firstplottime
+    
     first_time=True
     firstplottime=True
     rospy.init_node('DBSCAN_Clustering')
@@ -323,12 +318,6 @@ def main():
     sub = rospy.Subscriber('/scan', LaserScan, callback)
 
     pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=10)
-
-    
-
-    
-
-    #visualpub=rospy.Publisher('/visualpose',Marker,queue_size=10)
     
     rospy.spin()
         
