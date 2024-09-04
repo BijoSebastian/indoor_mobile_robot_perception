@@ -257,6 +257,7 @@ def callback(msg):
             lidar_poses.poses.append(lidar_pose)
 
         if(firstplottime):
+            plt.ion()
             fig, ax = plt.subplots()
             firstplottime=False
 
@@ -283,11 +284,13 @@ def callback(msg):
         ax.set_xlim(-5,5)
         ax.set_ylim(-5,5)
     
-        plt.show(block=False)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        #plt.show(block=False)
 
         plt.pause(0.001)
         plt.clf()
-        plt.close(fig)
+        #plt.close(fig)
 
     except Exception as error:
 
