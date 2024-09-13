@@ -184,8 +184,11 @@ def extract_PoseArray(point):
     return x
 #Callback functions
 def callback(image,lidar_detections,scan):
+    global entertime,exittime
     print('Callback started!')
-
+    entertime=time.time()
+    print('Time elapsed:',entertime-exittime)
+    
     before_callback_time=rospy.Time.now()
     before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
     
@@ -314,6 +317,9 @@ def callback(image,lidar_detections,scan):
     after_callback_time_sec=after_callback_time.to_nsec()*(10**(-9))
     time_elapse=after_callback_time_sec-before_callback_time_sec
 
+    exittime=time.time()
+    
+
     filtered_laser_pub.publish(filtered_pose_array)
     pub.publish(bridge.cv2_to_imgmsg(img))
     detection_pub.publish(camposearray)
@@ -321,6 +327,8 @@ def callback(image,lidar_detections,scan):
         
 
 rospy.init_node('reprojection')
+entertime=time.time()
+exittime=time.time()
 scan_topic = rospy.get_param("~scan_topic")
 image_topic = rospy.get_param("~image_topic")
 detection_topic = rospy.get_param("~detected_topic") #ADD THIS IN LAUNCH FILE
