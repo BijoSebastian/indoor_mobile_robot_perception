@@ -30,6 +30,8 @@ max_range = 4  # Set this to the maximum range of your lidar
 # Global Variables
 marker = Marker()
 scan = LaserScan()
+lidar_poses=PoseArray()
+lidar_poses.poses=[]
 
 def circle_residuals(params, x, y):
     h, k, r = params
@@ -157,7 +159,7 @@ def filter_infs(scan):
 
 def callback(msg):
     # Getting the polar coordinates of the point cloud
-    global pose,first_time,t0,firstplottime,ax,fig,background_scan
+    global pose,first_time,t0,firstplottime,ax,fig,background_scan,lidar_poses
     
     #entertime=time.time()
 
@@ -256,41 +258,41 @@ def callback(msg):
 
             lidar_poses.poses.append(lidar_pose)
 
-        if(firstplottime):
-            plt.ion()
-            fig, ax = plt.subplots()
-            firstplottime=False
+        # if(firstplottime):
+        #     plt.ion()
+        #     fig, ax = plt.subplots()
+        #     firstplottime=False
 
 
-        sns.scatterplot(x='x', y='y',
+        # sns.scatterplot(x='x', y='y',
 
-                data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
+        #         data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
 
-                hue='Cluster', palette='Set2', legend='full', s=20)
+        #         hue='Cluster', palette='Set2', legend='full', s=20)
         
-        plt.xlabel("X Position (meters)")
-        plt.ylabel("Y Position (meters)")
+        # plt.xlabel("X Position (meters)")
+        # plt.ylabel("Y Position (meters)")
     
     
 
     
-        plt.plot(0,0,'o')
+        # plt.plot(0,0,'o')
 
-        for i in fitted_circles:
-            circle = Circle(list(i[0]), i[1],fill=False)
-            plt.gca().add_patch(circle)
+        # for i in fitted_circles:
+        #     circle = Circle(list(i[0]), i[1],fill=False)
+        #     plt.gca().add_patch(circle)
             
     
-        ax.set_xlim(-5,5)
-        ax.set_ylim(-5,5)
+        # ax.set_xlim(-5,5)
+        # ax.set_ylim(-5,5)
     
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        #plt.show(block=False)
+        # fig.canvas.draw()
+        # fig.canvas.flush_events()
+        # #plt.show(block=False)
 
-        plt.pause(0.001)
-        plt.clf()
-        #plt.close(fig)
+        # plt.pause(0.001)
+        # plt.clf()
+        # #plt.close(fig)
 
     except Exception as error:
 
