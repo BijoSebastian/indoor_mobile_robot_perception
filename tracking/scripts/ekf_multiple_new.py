@@ -4,8 +4,7 @@ import rospy
 from sensor_msgs.msg import LaserScan
 import math
 import numpy as np
-import matplotlib.pyplot as plt
-import cv2  # importing cv
+from scipy.optimize import linear_sum_assignment
 
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose,PoseArray
@@ -13,7 +12,6 @@ from nav_msgs.msg import Path
 from tracking.msg import PoseIDArray,PoseID
 from std_msgs.msg import Header
 import time
-from sensor_msgs.msg import LaserScan
 
 #Object Initialization
 
@@ -28,6 +26,25 @@ def coord_to_angle(x1,y1,x2,y2):
     angle_deg_positive = (angle_rad + 2*math.pi)%(2*math.pi)
 
     return angle_deg_positive
+
+
+def cost_matrix(poses1,poses2):
+
+    cost_mat=np.empty([len(poses1),len(poses2)])
+    row=0
+    col=0
+    poses1=np.array(poses1)
+    poses2=np.array(poses2)
+    
+    for i in poses1:
+        for j in poses2:
+            dist=np.linalg.norm((i-j))
+            cost_mat[row,col]=dist
+            col+=1
+        col=0
+        row+=1
+    
+    return cost_mat
 
 #Classes
 
@@ -201,9 +218,6 @@ class person:
         s=np.matmul(np.matmul(person.H,self.P),((person.H).transpose()))+person.R
         k=np.matmul(np.matmul(self.P,(person.H.transpose())),(np.linalg.inv(s)))
         self.Xc=self.Xc+np.matmul(k,y)
-        #print('Addition to Xc:',np.matmul(k,y))
-        #print('Xc',self.Xc)
-        #p_updated=np.matmul((person.I-np.matmul(k,person.H)),self.P)
         self.P=np.matmul((person.I-np.matmul(k,person.H)),self.P)
         self.iterations=0
         self.ptime=self.ctime
@@ -213,33 +227,87 @@ class person:
 
 
 
-def callback(msg):
+def callback(filtered_pose_array):
     
-    global trackingstarted,iterations,kalmanpredpose_array
-    #print("CALLBACK ACTIVATED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    global kalmanpredpose_array,predicted_list 
+    
+    predicted_xy_list=[]
+    ids=[]
 
-    prediction_time_nsec=msg.header.stamp.to_nsec()
-    prediction_time_sec=prediction_time_nsec*(10**(-9))
-    prediction_time_sec+=1
-    predicted_time=rospy.Time.from_seconds(prediction_time_sec) #This is supposed to activate the second iteration in HAnode 
-    #There is bit of loss in precision due to above 4 lines
+    #Make predictions as a global list
+    for i in predicted_list:
+        predicted_xy_list.append([i[0],i[1]])
+        ids.append(i[2])
 
-    present_time=msg.header.stamp
+    #Filtered poses part
+    filtered_xy_list=[]
+    selected_xy_list=[]
+    ided_pose = []
+    ided_pose_array = []
+    #final_ptime=filter_poses.header.stamp
+    
 
-    p_time_nsec=msg.header.stamp.to_nsec()
+    for i in filtered_pose_array.poses:
+        filtered_xy_list.append([i.position.x,i.position.y])
+
+    
+    print('Filtered pose List:')
+    print(filtered_xy_list)
+    print('Predicted List:')
+    print(predicted_list)
+    cost=cost_matrix(filtered_xy_list,predicted_xy_list)
+
+    #Solve the assignment problem
+    row_indices, col_indices = linear_sum_assignment(cost)
+
+    #Extract the optimal assignment
+    assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
+
+    print("Optimal Assignment:")
+
+    for row, col in assignment:
+        print(f"Pose {filtered_xy_list[row]} in poses1, assigned to poses {predicted_xy_list[col]} in Poses2")
+        
+        #if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=0.7):
+
+        selected_xy_list.append(filtered_xy_list[row])
+
+        ided_pose = []
+        ided_pose.append(filtered_xy_list[row][0])
+        ided_pose.append(filtered_xy_list[row][1])
+        ided_pose.append(ids[col])
+
+        ided_pose_array.append(ided_pose)
+        
+
+    for k in selected_xy_list:
+        if(k in filtered_xy_list):
+            filtered_xy_list.remove(k)
+            print("Got removed:",k)
+
+    for j in filtered_xy_list:
+        ided_pose = []
+        ided_pose.append(j[0])
+        ided_pose.append(j[1])
+        ided_pose.append(0)
+        print('Going to be created:',(j[0],j[1],0))
+
+        ided_pose_array.append(ided_pose)
+
+    present_time=filtered_pose_array.header.stamp
+
+    p_time_nsec=filtered_pose_array.header.stamp.to_nsec()
     p_time_sec=p_time_nsec*(10**(-9))
 
     kalmanpose_array=PoseIDArray()
     kalmanpose_array.header= Header(stamp=present_time,frame_id='base_frame')
-    kalmanpredpose_array=PoseIDArray()
-    kalmanpredpose_array.header= Header(stamp=present_time,frame_id='base_frame') #supposed to be predicted_time
+
     pose_list=[]
 
-    for t in msg.poses:
-        pose=[t.ID,t.pose.position.x,t.pose.position.y,p_time_sec]
+    for t in ided_pose_array:
+        pose=[t[2],t[0],t[1],p_time_sec]
         pose_list.append(pose)
 
-    print(pose_list)
 
     for i in pose_list:
         meas=i[1:4]
@@ -252,16 +320,7 @@ def callback(msg):
                 prev_position=np.array([j.Xc[0][0],j.Xc[1][0]])
                 (j).measurement_update(meas_new)
                 print(f'Position of person {j.id} is {[j.Xc[0][0],j.Xc[1][0]]}')
-                #print('Distance between present and past:',np.linalg.norm(present_position-prev_position))
-                # if(np.linalg.norm(present_position-prev_position)<=0.7):
-                #     (j).measurement_update(meas_new)
-                #     print('ID:',j.id)
-                #     print('Xc:',j.Xc)
-                #     break
-                # else:
-                #     print('Actually didnt update cuz it was too far away. EKF is too lazy')
-                #     break
-        #if(i[0]==0 or i[0]!=j.id):
+                
         if(i[0]==0):
             print("NEW CREATED")
             Xc_new=np.array([[meas[0]],
@@ -304,6 +363,7 @@ def callback(msg):
 
         index+=1
 
+    #Making kalman pose array for publishing
     for i in people:
         kalmanpose=PoseID()
         kalmanpose.header.stamp=present_time
@@ -312,62 +372,55 @@ def callback(msg):
         kalmanpose.pose.position.y=i.Xc[1][0]
         kalmanpose_array.poses.append(kalmanpose)
 
-    kalman_pose_pub.publish(kalmanpose_array)
-    #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
+    #Time to do prediction
 
-def scan_callback(scan):
-    global people
-
-    current_time=scan.header.stamp
+    current_time=filtered_pose_array.header.stamp
     current_time=current_time.to_nsec()*(10**(-9)) #Time in seconds
 
     kalmanpredpose_array=PoseIDArray()
-    kalmanpredpose_array.header= Header(stamp=current_time,frame_id='base_frame') #supposed to be predicted_time
+    predicted_list = []
 
     if people:
         for i in people:
             print("PREDICTING...")
-            time_elapsed=current_time-i.ctime
-            # print('time_elapsed',time_elapsed)
-            # print('i.ctime:',i.ctime)
-            # print('Time elapsed:',time_elapsed)
+            time_elapsed=current_time-i.ptime
             i.prediction(time_elapsed)
-            # print('ID:', i.id)
-            # print('Xc:', i.Xc)
             predpose = PoseID()
             predpose.ID = i.id
             predpose.pose.position.x = i.Xc[0][0]
             predpose.pose.position.y = i.Xc[1][0]
             print(f'Position of person {i.id} is {[i.Xc[0][0],i.Xc[1][0]]}')
             kalmanpredpose_array.poses.append(predpose)
+            predicted_list.append([i.Xc[0][0],i.Xc[1][0],i.id])
 
         if people:
             i=people[0]
             duration=time_elapsed
             increment = rospy.Duration(duration)
-            new_time = scan.header.stamp + increment
+            new_time = filtered_pose_array.header.stamp + increment
             kalmanpredpose_array.header= Header(stamp=new_time,frame_id='base_frame') 
-            print('Prediction time:',new_time.to_nsec()*(10**(-9)))
 
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
+    kalman_pose_pub.publish(kalmanpose_array)
+    #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
+
 def main():
-    global kalman_pose_pub,kalman_predicted_pose_pub,people
+    global kalman_pose_pub,kalman_predicted_pose_pub,people, predicted_list
 
     #Initial Condition    
 
     people=[]
+    predicted_list =[]
     
     rospy.init_node('Kalman_filter')
-    measurement_sub = rospy.Subscriber('/Measurements', PoseIDArray, callback,queue_size=10)
 
-    scan_sub = rospy.Subscriber('/scan', LaserScan, scan_callback, queue_size=10)
+    measurement_sub = rospy.Subscriber('/PoseFilteredLaser', PoseArray, callback,queue_size=10)
 
     kalman_pose_pub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=10)
 
     kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=10)
     
-
     rospy.spin()
 
 

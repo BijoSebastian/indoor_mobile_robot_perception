@@ -35,9 +35,11 @@ def cost_matrix(poses1,poses2):
 def callback_filtered_laser(filtered_pose_array):
 
     global firsttime
+    print('Scan callback entered.')
     if(not firsttime):
         ided_pose_array=PoseIDArray()
         ided_pose_array.header.stamp=filtered_pose_array.header.stamp
+        print('First Filter Pose Time:',(filtered_pose_array.header.stamp.to_nsec())*(10**(-9)))
         for j in filtered_pose_array.poses:
             ided_pose=PoseID()
             ided_pose.pose.position.x=j.position.x
@@ -45,22 +47,9 @@ def callback_filtered_laser(filtered_pose_array):
             ided_pose.ID=0
 
             ided_pose_array.poses.append(ided_pose)
-
+        firsttime= True
         measurepub.publish(ided_pose_array)
 
-
-# def callback_predicted(poses):
-
-#     print("Predicted poses time:")
-#     print(poses.header.stamp)
-
-#     # global predictions,ids
-#     # predictions=[]
-#     # ids=[]
-
-#     # for i in poses.poses:
-#     #     predictions.append([i.pose.position.x,i.pose.position.y])
-#     #     ids.append(i.ID)
     
 
 def callback(filtered_pose_array,predicted_pose_array):
@@ -89,6 +78,10 @@ def callback(filtered_pose_array,predicted_pose_array):
         filtered_xy_list.append([i.position.x,i.position.y])
 
     
+    print('Filtered pose List:')
+    print(filtered_xy_list)
+    print('Predicted pose List:')
+    print(predicted_xy_list)
     cost=cost_matrix(filtered_xy_list,predicted_xy_list)
 
     #Solve the assignment problem
@@ -127,6 +120,7 @@ def callback(filtered_pose_array,predicted_pose_array):
         ided_pose.pose.position.x=j[0]
         ided_pose.pose.position.y=j[1]
         ided_pose.ID=0
+        print('Going to be created:',(0,j[0],j[1]))
 
         ided_pose_array.poses.append(ided_pose)
 
@@ -147,7 +141,7 @@ def main():
 
     #Debug this by checking if its actaully the problem with time sychronisaer. echo the above topics
 
-    ts = message_filters.ApproximateTimeSynchronizer([pose_filtered_sub,pose_predictions_sub], 10, 1) #try varying time diff
+    ts = message_filters.ApproximateTimeSynchronizer([pose_filtered_sub,pose_predictions_sub], 10, 0.1) #try varying time diff
 
     ts.registerCallback(callback)
 
