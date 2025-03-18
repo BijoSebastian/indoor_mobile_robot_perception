@@ -28,7 +28,7 @@ ROS_NAMESPACE=usb_cam rosrun image_proc image_proc
 ```
 
 ### Step 3: Launch AprilTag Ground Truth
-Open **Terminal 4** and run:
+Open **Terminal 3** and run:
 
 ```bash
 cd catkin_ws
@@ -37,7 +37,7 @@ roslaunch apriltag_ros ground_truth.launch
 ```
 
 ### Step 4: Start Camera-LiDAR Projection
-Open **Terminal 5** and run:
+Open **Terminal 4** and run:
 
 ```bash
 cd catkin_ws
@@ -46,7 +46,7 @@ roslaunch camera_2d_lidar_calibration reprojection.launch
 ```
 
 ### Step 5: Start Tracking 
-Open **Terminal 6** and run:
+Open **Terminal 5** and run:
 
 ```bash
 cd catkin_ws
@@ -55,7 +55,7 @@ roslaunch tracking tracking.launch
 ```
 
 ### Step 6: Play the Required Bag File
-Open **Terminal 3** and run:
+Open **Terminal 6** and run:
 
 ```bash
 cd catkin_ws
