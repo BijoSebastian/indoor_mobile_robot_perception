@@ -14,6 +14,8 @@ import sensor_msgs.point_cloud2 as pc2
 from scipy.optimize import linear_sum_assignment
 from std_msgs.msg import Header
 import time
+import os
+import rospkg
 
 def ensure_2d_array(arr):
   """Converts an array to a 2D NumPy array.
@@ -342,13 +344,21 @@ lp = lg.LaserProjection()
 
 print("LOADING YOLO")
 
-net = cv2.dnn.readNet("/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.cfg","/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.weights")
+rospack = rospkg.RosPack()
+pkg_path = rospack.get_path('camera_2d_lidar_calibration')  # Package name
+cfg_path = os.path.join(pkg_path, 'src', 'yolov4-tiny.cfg')
+weights_path = os.path.join(pkg_path, 'src', 'yolov4-tiny.weights')
+coco_path = os.path.join(pkg_path, 'src', 'coco.names')
+
+net = cv2.dnn.readNet(cfg_path, weights_path)
+
+#net = cv2.dnn.readNet("/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.cfg","/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.weights")
 
 #save all the names in file of the list classes
 
 classes = []
 
-with open("/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/coco.names", "r") as f:
+with open(coco_path, "r") as f:
 
     classes = [line.strip() for line in f.readlines()]
 

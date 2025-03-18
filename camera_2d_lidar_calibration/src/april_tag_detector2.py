@@ -10,6 +10,8 @@ import numpy as np
 import tf.transformations
 from tracking.msg import PoseID, PoseIDArray
 import csv
+import os
+import rospkg
 
 class AprilTagDetector:
     def __init__(self):
@@ -73,9 +75,16 @@ class AprilTagDetector:
         self.tvec_c_to_l = q[:3, 3]
 
         self.rot_mat_c_to_l = q[:3, :3]
+        
+
+
+        rospack = rospkg.RosPack()
+        pkg_path = rospack.get_path('camera_2d_lidar_calibration')  # Package name
+        self.csv_file = os.path.join(pkg_path, 'src', 'pose_data.csv')
+
 
         # CSV file initialization
-        self.csv_file = "/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/pose_data.csv"  # Specify your desired file path here
+        #self.csv_file = "/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/pose_data.csv"  # Specify your desired file path here
         with open(self.csv_file, 'w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Tag ID", "X", "Y", "Z"])
