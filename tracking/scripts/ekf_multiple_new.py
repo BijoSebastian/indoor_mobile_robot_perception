@@ -243,7 +243,11 @@ def callback(filtered_pose_array):
     filtered_xy_list=[]
     selected_xy_list=[]
     ided_pose = []
-    ided_pose_array = []
+    ided_pose_list = []
+
+    ided_posemsg_array=PoseIDArray()
+    ided_posemsg_array.header.stamp=filtered_pose_array.header.stamp
+    ided_posemsg_array.header.frame_id=ided_posemsg_array.header.frame_id
     #final_ptime=filter_poses.header.stamp
     
 
@@ -277,7 +281,16 @@ def callback(filtered_pose_array):
         ided_pose.append(filtered_xy_list[row][1])
         ided_pose.append(ids[col])
 
-        ided_pose_array.append(ided_pose)
+        ided_pose_list.append(ided_pose)
+
+        ided_posemsg=PoseID()
+        ided_posemsg.pose.position.x=filtered_xy_list[row][0]
+        ided_posemsg.pose.position.y=filtered_xy_list[row][1]
+        ided_posemsg.ID=ids[col]
+
+        ided_posemsg_array.poses.append(ided_posemsg)
+
+        
         
 
     for k in selected_xy_list:
@@ -292,7 +305,14 @@ def callback(filtered_pose_array):
         ided_pose.append(0)
         print('Going to be created:',(j[0],j[1],0))
 
-        ided_pose_array.append(ided_pose)
+        ided_posemsg=PoseID()
+        ided_posemsg.pose.position.x=j[0]
+        ided_posemsg.pose.position.y=j[1]
+        ided_posemsg.ID=0
+
+
+        ided_pose_list.append(ided_pose)
+        ided_posemsg_array.poses.append(ided_posemsg)
 
     present_time=filtered_pose_array.header.stamp
 
@@ -304,7 +324,7 @@ def callback(filtered_pose_array):
 
     pose_list=[]
 
-    for t in ided_pose_array:
+    for t in ided_pose_list:
         pose=[t[2],t[0],t[1],p_time_sec]
         pose_list.append(pose)
 
@@ -403,10 +423,11 @@ def callback(filtered_pose_array):
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
     kalman_pose_pub.publish(kalmanpose_array)
+    measurepub.publish(ided_posemsg_array)
     #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
 def main():
-    global kalman_pose_pub,kalman_predicted_pose_pub,people, predicted_list
+    global kalman_pose_pub,kalman_predicted_pose_pub,people, predicted_list, measurepub
 
     #Initial Condition    
 
@@ -421,6 +442,8 @@ def main():
 
     kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=10)
     
+    measurepub=rospy.Publisher('/Measurements',PoseIDArray,queue_size=10)
+
     rospy.spin()
 
 
