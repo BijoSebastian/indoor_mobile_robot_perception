@@ -390,6 +390,9 @@ def callback(filtered_pose_array):
         kalmanpose.ID=i.id
         kalmanpose.pose.position.x=i.Xc[0][0]
         kalmanpose.pose.position.y=i.Xc[1][0]
+        kalmanpose.pose.orientation.z=i.Xc[2][0]
+        kalmanpose.pose.position.z=i.Xc[3][0] # I m using z position to store linear velocity
+        kalmanpose.pose.orientation.x=i.Xc[4][0] # I m using x orientation to store angular velocity
         kalmanpose_array.poses.append(kalmanpose)
 
     #Time to do prediction
