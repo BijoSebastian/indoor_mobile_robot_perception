@@ -1,0 +1,17 @@
+<launch>
+
+    <node name="reprojection" pkg="camera_2d_lidar_calibration" type="reprojection.py" output="screen">
+        <param name="scan_topic" value="/scan" />
+        <!-- <param name="scan_topic" value="/hokuyo" > -->
+        <param name="image_topic" value="usb_cam/image_rect_color" />
+        <param name="detected_topic" value="/PoseLidar" />
+        <param name="calib_file" value="$(find camera_2d_lidar_calibration)/data/calibration_result.txt" />
+        <param name="config_file" value="$(find camera_2d_lidar_calibration)/config/config.yaml" />
+        <param name="laser_point_radius" type="int" value="3" />    <!-- Reprojected laser point radius size in pixels -->
+        <param name="detection_point_radius" type="int" value="7" />
+        <param name="time_diff" type="double" value="0.6" />  <!-- Maximum time difference in seconds between image and laser scan to be registered and processed -->
+    </node>
+
+    <node name="rviz" type="rviz" pkg="rviz" args="-d $(find camera_2d_lidar_calibration)/rviz/reprojection.rviz"/>
+
+</launch>
