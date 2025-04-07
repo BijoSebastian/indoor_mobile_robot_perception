@@ -7,11 +7,17 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Pose,PoseArray
+from geometry_msgs.msg import Pose,PoseArray,PoseWithCovarianceStamped
 from nav_msgs.msg import Path
 from tracking.msg import PoseIDArray,PoseID
 from std_msgs.msg import Header
 import time
+import tf2_ros
+import tf2_geometry_msgs
+from geometry_msgs.msg import PoseStamped
+
+
+
 
 #Object Initialization
 
@@ -224,12 +230,76 @@ class person:
         self.ctime=meas[3][0]
 
 
+import numpy as np
+
+def transform_frame1_to_frame2(person_frame1, frame1_orientation, frame1_translation):
+    """
+    Transforms a point from the frame1 frame to the frame2 frame.
+    
+    Parameters:
+    person_frame1 (tuple): (x, y, z) position of the person in the frame1 frame.
+    frame1_orientation (tuple): (roll, pitch, yaw) orientation of the frame1 relative to the frame2 in radians.
+    frame1_translation (tuple): (tx, ty, tz) translation of the frame1 relative to the frame2.
+    
+    Returns:
+    np.array: Transformed (x', y', z') position in the frame2 frame.
+    """
+    roll, pitch, yaw = frame1_orientation
+    tx, ty, tz = frame1_translation
+    
+    # Rotation matrices for 3D transformation
+    R_x = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+    
+    R_y = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+    
+    R_z = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    
+    # Combined rotation matrix
+    R = R_z @ R_y @ R_x
+    
+    # Convert input point to numpy array
+    person_frame1_np = np.array(person_frame1)
+    
+    # Apply rotation
+    rotated_point = R @ person_frame1_np
+    
+    # Apply translation
+    person_frame2_frame = rotated_point + np.array([tx, ty, tz])
+    
+    return person_frame2_frame
+
+
+
+
+
+def pose_callback(robot_pose):
+    #Here using the robot pose, the kalman pose needs to transformed to global frame.
+    #publish it to /globalkalmanposearray topic using PoseIDArray msg
+
+    global robot_position
+
+
+    robot_position = robot_pose
+
+
 
 
 
 def callback(filtered_pose_array):
     
-    global kalmanpredpose_array,predicted_list 
+    global kalmanpredpose_array,predicted_list, robot_position
     
     predicted_xy_list=[]
     ids=[]
@@ -255,10 +325,10 @@ def callback(filtered_pose_array):
         filtered_xy_list.append([i.position.x,i.position.y])
 
     
-    print('Filtered pose List:')
-    print(filtered_xy_list)
-    print('Predicted List:')
-    print(predicted_list)
+    # print('Filtered pose List:')
+    # print(filtered_xy_list)
+    # print('Predicted List:')
+    # print(predicted_list)
     cost=cost_matrix(filtered_xy_list,predicted_xy_list)
 
     #Solve the assignment problem
@@ -267,7 +337,7 @@ def callback(filtered_pose_array):
     #Extract the optimal assignment
     assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
 
-    print("Optimal Assignment:")
+    #print("Optimal Assignment:")
 
     for row, col in assignment:
         print(f"Pose {filtered_xy_list[row]} in poses1, assigned to poses {predicted_xy_list[col]} in Poses2")
@@ -403,6 +473,9 @@ def callback(filtered_pose_array):
     kalmanpredpose_array=PoseIDArray()
     predicted_list = []
 
+
+    #print('robot_x:',robot_x)
+
     if people:
         for i in people:
             print("PREDICTING...")
@@ -421,31 +494,148 @@ def callback(filtered_pose_array):
             duration=time_elapsed
             increment = rospy.Duration(duration)
             new_time = filtered_pose_array.header.stamp + increment
-            kalmanpredpose_array.header= Header(stamp=new_time,frame_id='base_frame') 
+            kalmanpredpose_array.header= Header(stamp=new_time,frame_id='base_frame')
 
+            #Converting kalmanposearray to global coordinates
+
+            robot_x = robot_position.pose.pose.position.x
+            robot_y = robot_position.pose.pose.position.y
+
+            #print('robot_x:',robot_x)
+
+            q=robot_position.pose.pose.orientation
+            siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+            cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+            #robot_yaw = -(math.atan2(siny_cosp, cosy_cosp)-(math.pi/2))
+            robot_yaw = (math.atan2(siny_cosp, cosy_cosp))
+
+            globalposearray = PoseIDArray()
+            globalposearray.header= Header(stamp=new_time,frame_id='map')
+
+            intermediateposearray = PoseArray()
+            intermediateposearray.header= Header(stamp=new_time,frame_id='usb_cam')
+
+            for human in people:
+
+                # local_pose = PoseStamped()
+                # local_pose.header.frame_id = "base_frame"
+                # local_pose.header.stamp = rospy.Time.now()
+                # local_pose.pose.position.x = human.Xc[0][0]*1000
+                # local_pose.pose.position.y = human.Xc[1][0]*1000
+                # local_pose.pose.position.z = 0
+                # local_pose.pose.orientation.z = math.sin(human.Xc[2][0] / 2.0)
+                # local_pose.pose.orientation.w = math.cos(human.Xc[2][0] / 2.0)
+                
+                # try:
+                #     transform = tf_buffer.lookup_transform("map", "base_frame", rospy.Time(0), rospy.Duration(1.0))
+                #     global_pose = tf2_geometry_msgs.do_transform_pose(local_pose, transform)
+
+                #     transformed_pose = PoseID()
+                #     transformed_pose.ID = human.id
+                #     transformed_pose.pose = global_pose.pose
+                #     transformed_pose.pose.position.z = human.Xc[3][0]  # Linear velocity
+                #     transformed_pose.pose.orientation.x = human.Xc[4][0]  # Angular velocity
+
+                #     globalposearray.poses.append(transformed_pose)
+                # except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                #     rospy.logwarn("TF2 Transform failed for human ID: {}".format(human.id))
+
+                
+
+                local_x=human.Xc[0][0]*1000
+                local_y=human.Xc[1][0]*1000
+                local_yaw=human.Xc[2][0]
+
+                lidarlocalpose = [local_x,local_y,0]
+                # Peforming transform from Lidar to robot frame (USBCAM frame)
+                #local_x,local_y,local_z= transform_frame1_to_frame2(lidarlocalpose,[np.pi/2,np.pi/2,0],[0,0,0])
+
+                localpose = Pose()
+                #localpose.header= Header(stamp=rospy.Time.now(),frame_id='usb_cam')
+                localpose.position.x = local_x
+                localpose.position.y = local_y
+                localpose.position.z = 0
+
+                #local_y = local_y
+                # temp = local_y
+                # local_y = local_x
+                # local_x = temp
+
+                # Transform to global frame
+                #global_x = (robot_x + (local_x * math.cos(robot_yaw)) - (local_y * math.sin(robot_yaw)))
+                #global_y = (robot_y + (local_x * math.sin(robot_yaw)) + (local_y * math.cos(robot_yaw)))
+
+                global_x,global_y,global_z = transform_frame1_to_frame2(lidarlocalpose,[0,0,np.pi+robot_yaw],[robot_x,robot_y,0])
+
+                # global_x = (robot_x + (local_x * math.cos(robot_yaw)) - (local_y * math.sin(robot_yaw)))
+                # global_y = (robot_y + (local_x * math.sin(robot_yaw)) + (local_y * math.cos(robot_yaw)))
+                global_yaw = robot_yaw + local_yaw
+                global_yaw = (global_yaw + math.pi) % (2 * math.pi) - math.pi
+
+                print('global_x:',global_x)
+                print('global_y:',global_y)
+                print('global_z:',global_z)
+                print('global_yaw:',global_yaw)
+
+                # temp = global_x
+                # global_x = global_y
+                # global_y = temp
+                #global_y = global_z
+                # global_x = global_z
+                # global_y = -global_y
+
+
+                #Transform to global coordinates
+
+                globalpose = PoseID()
+                globalpose.ID = human.id
+                globalpose.pose.position.x = global_x
+                globalpose.pose.position.y = global_y
+                globalpose.pose.orientation.z=global_yaw
+                globalpose.pose.position.z= human.Xc[3][0] # I m using z position to store linear velocity
+                globalpose.pose.orientation.x=human.Xc[4][0] # I m using z position to store angular velocity
+                print('v:',human.Xc[3][0])
+
+                globalposearray.poses.append(globalpose)
+                intermediateposearray.poses.append(localpose)
+
+        intermediate_kalman_pose_pub.publish(intermediateposearray)
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
+        global_kalman_pose_pub.publish(globalposearray)
 
     kalman_pose_pub.publish(kalmanpose_array)
     measurepub.publish(ided_posemsg_array)
     #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
 def main():
-    global kalman_pose_pub,kalman_predicted_pose_pub,people, predicted_list, measurepub
+    global kalman_pose_pub,kalman_predicted_pose_pub,people, predicted_list, measurepub, robot_position,global_kalman_pose_pub,intermediate_kalman_pose_pub
+    global tf_buffer
 
     #Initial Condition    
 
     people=[]
     predicted_list =[]
+    robot_position = PoseWithCovarianceStamped()
     
     rospy.init_node('Kalman_filter')
 
     measurement_sub = rospy.Subscriber('/PoseFilteredLaser', PoseArray, callback,queue_size=10)
 
+    robot_pose_sub = rospy.Subscriber('/pose_ekf', PoseWithCovarianceStamped, pose_callback,queue_size=10)
+
     kalman_pose_pub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=10)
+
+    global_kalman_pose_pub=rospy.Publisher('/globalkalmanposeArray',PoseIDArray,queue_size=10)
+
+    intermediate_kalman_pose_pub=rospy.Publisher('/intermediatekalmanpose',PoseArray,queue_size=10)
 
     kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=10)
     
     measurepub=rospy.Publisher('/Measurements',PoseIDArray,queue_size=10)
+
+    tf_buffer = tf2_ros.Buffer()
+    tf_listener = tf2_ros.TransformListener(tf_buffer)
+
 
     rospy.spin()
 
