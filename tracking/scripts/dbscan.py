@@ -19,6 +19,7 @@ from nav_msgs.msg import Path
 from geometry_msgs.msg import Pose,PoseArray
 from std_msgs.msg import Header
 from scipy.optimize import least_squares
+from tracking.msg import PoseID,PoseIDArray
 
 #Maybe later we could use Pose stamped
 # Global Variables
@@ -26,7 +27,9 @@ from scipy.optimize import least_squares
 previous_scan = None
 pose_lidar_pub = None
 first_time = True
-max_range = 4  # Set this to the maximum range of your lidar
+max_range = 6  # Set this to the maximum range of your lidar
+kalmanpositionarray = []
+people_fitted_circles = []
 
 # Global Variables
 marker = Marker()
@@ -157,10 +160,16 @@ def visualization_point(center):
 def filter_infs(scan):
     return np.array([min(r, max_range) if not np.isinf(r) else max_range for r in scan])
  
+def kalmancallback(pose_array):
+    global kalmanpositionarray
+    kalmanpositionarray = []
+    for pose in pose_array.poses:
+        kalmanpose = [pose.pose.position.x, pose.pose.position.y]
+        kalmanpositionarray.append(kalmanpose)
 
 def callback(msg):
     # Getting the polar coordinates of the point cloud
-    global pose,first_time,t0,firstplottime,ax,fig,previous_scan,lidar_poses
+    global pose,first_time,t0,firstplottime,ax,fig,previous_scan,lidar_poses, kalmanpositionarray
     
     #entertime=time.time()
 
@@ -244,8 +253,21 @@ def callback(msg):
         print('This iteration:')
         for p in fitted_circles:
             print(p)
-            if(p[1]<0.2 and p[1]>0.01):
-                people.append(list(p[0]))
+            center, radius = p
+            near_tracked = False
+            for kal_pos in kalmanpositionarray:
+                # If the fitted circle's center is within 0.5m of a tracked person
+                if np.linalg.norm(np.array(center) - np.array(kal_pos)) < 0.5:
+                    near_tracked = True
+                    break
+            if near_tracked:
+                if 0.01 < radius < 1:
+                    people.append(center)
+                    people_fitted_circles.append(p)
+            else:
+                if 0.01 < radius < 0.2:
+                    people.append(center)
+                    people_fitted_circles.append(p)
             #people.append(p)
         lidar_poses=PoseArray()
 
@@ -260,41 +282,50 @@ def callback(msg):
 
             lidar_poses.poses.append(lidar_pose)
 
-        # if(firstplottime):
-        #     plt.ion()
-        #     fig, ax = plt.subplots()
-        #     firstplottime=False
+        if(firstplottime):
+            plt.ion()
+            fig, ax = plt.subplots()
+            firstplottime=False
 
 
-        # sns.scatterplot(x='x', y='y',
+        sns.scatterplot(x='x', y='y',
 
-        #         data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
+                data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
 
-        #         hue='Cluster', palette='Set2', legend='full', s=20)
+                hue='Cluster', palette='Set2', legend='full', s=20)
         
-        # plt.xlabel("X Position (meters)")
-        # plt.ylabel("Y Position (meters)")
+        plt.xlabel("X Position (meters)")
+        plt.ylabel("Y Position (meters)")
     
     
 
     
-        # plt.plot(0,0,'o')
+        plt.plot(0,0,'o')
 
-        # for i in fitted_circles:
-        #     circle = Circle(list(i[0]), i[1],fill=False)
-        #     plt.gca().add_patch(circle)
+        for i in fitted_circles:
+            circle = Circle(list(i[0]), i[1],fill=False)
+            plt.gca().add_patch(circle)
+
+        for i in people_fitted_circles:
+            center, radius = i
+            circle = Circle(center, radius,fill=False,color = 'blue')
+            plt.gca().add_patch(circle)
+
+        for i in kalmanpositionarray:
+            circle = Circle(i, 1,fill=False,color = 'red')
+            plt.gca().add_patch(circle)
             
     
-        # ax.set_xlim(-5,5)
-        # ax.set_ylim(-5,5)
+        ax.set_xlim(-5,5)
+        ax.set_ylim(-5,5)
     
-        # fig.canvas.draw()
-        # fig.canvas.flush_events()
-        # #plt.show(block=False)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        #plt.show(block=False)
 
-        # plt.pause(0.001)
-        # plt.clf()
-        # #plt.close(fig)
+        plt.pause(0.001)
+        plt.clf()
+        #plt.close(fig)
 
     except Exception as error:
 
@@ -325,6 +356,7 @@ def main():
     rospy.init_node('DBSCAN_Clustering')
     
     sub = rospy.Subscriber('/scan', LaserScan, callback)
+    sub2 = rospy.Subscriber('/kalmanposeArray', PoseIDArray, kalmancallback)
 
     pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=10)
     
