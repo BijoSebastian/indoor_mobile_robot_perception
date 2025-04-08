@@ -22,7 +22,8 @@ from scipy.optimize import least_squares
 
 #Maybe later we could use Pose stamped
 # Global Variables
-background_scan = None
+# background_scan = None
+previous_scan = None
 pose_lidar_pub = None
 first_time = True
 max_range = 4  # Set this to the maximum range of your lidar
@@ -159,7 +160,7 @@ def filter_infs(scan):
 
 def callback(msg):
     # Getting the polar coordinates of the point cloud
-    global pose,first_time,t0,firstplottime,ax,fig,background_scan,lidar_poses
+    global pose,first_time,t0,firstplottime,ax,fig,previous_scan,lidar_poses
     
     #entertime=time.time()
 
@@ -167,7 +168,7 @@ def callback(msg):
 
     #Time handling
     if(first_time==True):
-        background_scan = current_scan
+        previous_scan = current_scan
         t0=msg.header.stamp.to_nsec()*(10**(-9))
         rospy.loginfo("Background scan stored")
         first_time=False
@@ -179,10 +180,10 @@ def callback(msg):
     before_clustering_time=rospy.Time.now()
     before_clustering_time_sec=before_clustering_time.to_nsec()*(10**(-9))
 
-    difference = np.abs(current_scan - background_scan)
+    difference = np.abs(current_scan - previous_scan)
 
     # Set a threshold for considering the difference as a significant change
-    threshold = 0.1
+    threshold = 0.01
     significant_indices = np.where(difference > threshold)[0]
     
     pts_r = current_scan[significant_indices]
@@ -240,15 +241,16 @@ def callback(msg):
             print("!!!!There is error in fitting circle!!!!")
 
         people=[]
+        print('This iteration:')
         for p in fitted_circles:
-            
+            print(p)
             if(p[1]<0.2 and p[1]>0.01):
                 people.append(list(p[0]))
             #people.append(p)
         lidar_poses=PoseArray()
 
         #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
-        lidar_poses.header = Header(stamp=ptime_stamp, frame_id="map")
+        lidar_poses.header = Header(stamp=ptime_stamp, frame_id="lidar")
 
         
         for k in people:
@@ -306,6 +308,8 @@ def callback(msg):
     #exittime=time.time()
     
     #print('time taken:',exittime-entertime)
+
+    previous_scan = current_scan
     
     pose_lidar_pub.publish(lidar_poses)
 
