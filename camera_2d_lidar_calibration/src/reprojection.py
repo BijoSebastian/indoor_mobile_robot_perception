@@ -17,6 +17,9 @@ import time
 import os
 import rospkg
 
+#Global Variables
+MAX_ASSOCIATION_DIST = 90
+
 def ensure_2d_array(arr):
   """Converts an array to a 2D NumPy array.
 
@@ -292,6 +295,8 @@ def callback(image,lidar_detections,scan):
             assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
             
             for row, col in assignment:
+                dist = np.linalg.norm(np.array(detected_points[row]) - np.array(cam_detections[col]))
+                print('Distance:!!!!!!!!!!!!!!:',dist)
                 # print('row, col:',row, col)
                 # print('obj_detected_Points:',obj_detected_Points)
                 # print(f"Pose {obj_detected_Points[0][row]} in poses1, assigned to poses {cam_detections[col]} in Poses2")
@@ -299,6 +304,9 @@ def callback(image,lidar_detections,scan):
                 # print('detected_point:',detected_points[row])
                 # print('cam_detections:',cam_detections[col])
                 # print('Type:',type(detected_points[row]))
+                if dist > MAX_ASSOCIATION_DIST:
+                    print(f"Skipping association between {detected_points[row]} and {cam_detections[col]} due to large distance: {dist}")
+                    continue
                 if isinstance(detected_points[row], (list, np.ndarray)):
                     cv2.line(img, detected_points[row], cam_detections[col], (255, 255, 0) , 5) 
                 else:

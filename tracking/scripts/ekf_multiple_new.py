@@ -14,7 +14,7 @@ from std_msgs.msg import Header
 import time
 
 #Object Initialization
-
+# MAX_ASSOCIATION_DIST = 0.6
 
 #Functions
 
@@ -270,8 +270,13 @@ def callback(filtered_pose_array):
     print("Optimal Assignment:")
 
     for row, col in assignment:
+        # dist = np.linalg.norm(np.array(filtered_xy_list[row]) - np.array(predicted_xy_list[col]))
+
         print(f"Pose {filtered_xy_list[row]} in poses1, assigned to poses {predicted_xy_list[col]} in Poses2")
         
+        # if dist > MAX_ASSOCIATION_DIST:
+        #     print(f"Skipping association between {filtered_xy_list[row]} and {predicted_xy_list[col]} due to large distance: {dist}")
+        #     continue
         #if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=0.7):
 
         selected_xy_list.append(filtered_xy_list[row])

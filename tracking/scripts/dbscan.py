@@ -28,6 +28,8 @@ previous_scan = None
 pose_lidar_pub = None
 first_time = True
 max_range = 6  # Set this to the maximum range of your lidar
+near_tracking_range = 2
+near_tracking_range_radius = 10
 kalmanpositionarray = []
 people_fitted_circles = []
 
@@ -67,6 +69,8 @@ def fit_clusters_into_circles2(clusters):
 
         # Fit a circle using minEnclosingCircle
         center, radius = fit_circle(x,y)
+
+        center = [np.mean(x),np.mean(y)]
 
         fitted_circles.append([center,radius])
 
@@ -219,7 +223,7 @@ def callback(msg):
 
     df = pd.DataFrame(newscan_rect, columns =['x', 'y'])
     try:
-        clustering = DBSCAN(eps=0.05, min_samples=3).fit(df)
+        clustering = DBSCAN(eps=0.1, min_samples=3).fit(df)
 
     
 
@@ -250,18 +254,19 @@ def callback(msg):
             print("!!!!There is error in fitting circle!!!!")
 
         people=[]
+        people_fitted_circles = []
         print('This iteration:')
         for p in fitted_circles:
-            print(p)
+            #print(p)
             center, radius = p
             near_tracked = False
             for kal_pos in kalmanpositionarray:
                 # If the fitted circle's center is within 0.5m of a tracked person
-                if np.linalg.norm(np.array(center) - np.array(kal_pos)) < 0.5:
+                if np.linalg.norm(np.array(center) - np.array(kal_pos)) < near_tracking_range:
                     near_tracked = True
                     break
             if near_tracked:
-                if 0.01 < radius < 1:
+                if 0.01 < radius < near_tracking_range_radius:
                     people.append(center)
                     people_fitted_circles.append(p)
             else:
@@ -282,49 +287,64 @@ def callback(msg):
 
             lidar_poses.poses.append(lidar_pose)
 
-        if(firstplottime):
+        # ***************** Dynamic Plot Updating *****************
+        # Create figure/axis only once.
+        if firstplottime:
             plt.ion()
             fig, ax = plt.subplots()
-            firstplottime=False
+            firstplottime = False
 
-
-        sns.scatterplot(x='x', y='y',
-
-                data=DBSCAN_dataset[DBSCAN_dataset['Cluster']!=-1],
-
-                hue='Cluster', palette='Set2', legend='full', s=20)
+        # Clear the previous axis content.
+        ax.cla()
         
-        plt.xlabel("X Position (meters)")
-        plt.ylabel("Y Position (meters)")
-    
-    
+        # Plot DBSCAN points.
+        # (Using standard matplotlib scatter for simplicity.)
+        # Use a color palette for distinct cluster colors
+        palette = sns.color_palette("husl", n_colors=len(DBSCAN_dataset['Cluster'].unique()))
+        cluster_labels = sorted(DBSCAN_dataset['Cluster'].unique())
 
-    
-        plt.plot(0,0,'o')
+        for idx, label in enumerate(cluster_labels):
+            cluster_points = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
+            color = 'gray' if label == -1 else palette[idx]  # gray for outliers
+            ax.scatter(cluster_points['x'], cluster_points['y'], s=20, color=color, label=f"Cluster {label}" if label != -1 else "Outliers")
 
+            # Add cluster label text (skipping outliers)
+            # if label != -1:
+            #     x_mean = cluster_points['x'].mean()
+            #     y_mean = cluster_points['y'].mean()
+            #     ax.text(x_mean, y_mean, str(label), fontsize=10, color='black', ha='center', va='center',
+            #             bbox=dict(facecolor='white', alpha=0.6, edgecolor='black', boxstyle='round,pad=0.2'))
+
+        
+        ax.set_xlabel("X Position (meters)")
+        ax.set_ylabel("Y Position (meters)")
+        ax.plot(0, 0, 'o')  # Origin
+
+        # Draw the fitted circles (black outline).
         for i in fitted_circles:
-            circle = Circle(list(i[0]), i[1],fill=False)
-            plt.gca().add_patch(circle)
+            circle = Circle(list(i[0]), i[1], fill=False, edgecolor='black')
+            ax.add_patch(circle)
 
+        # Draw the circles that pass the threshold (blue outline).
         for i in people_fitted_circles:
             center, radius = i
-            circle = Circle(center, radius,fill=False,color = 'blue')
-            plt.gca().add_patch(circle)
+            circle = Circle(center, radius, fill=False, edgecolor='blue')
+            ax.add_patch(circle)
 
+        # Draw circles for the kalman tracked positions (red outline, radius 1).
         for i in kalmanpositionarray:
-            circle = Circle(i, 1,fill=False,color = 'red')
-            plt.gca().add_patch(circle)
-            
-    
-        ax.set_xlim(-5,5)
-        ax.set_ylim(-5,5)
-    
+            circle = Circle(i, near_tracking_range, fill=False, color='red')
+            ax.add_patch(circle)
+
+        # Fix the axes limits.
+        ax.set_xlim(-5, 5)
+        ax.set_ylim(-5, 5)
+        
+        # Update the canvas.
         fig.canvas.draw()
         fig.canvas.flush_events()
-        #plt.show(block=False)
-
         plt.pause(0.001)
-        plt.clf()
+        # ***********************************************************
         #plt.close(fig)
 
     except Exception as error:
