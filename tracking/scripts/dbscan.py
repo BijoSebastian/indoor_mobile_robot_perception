@@ -223,7 +223,7 @@ def callback(msg):
 
     df = pd.DataFrame(newscan_rect, columns =['x', 'y'])
     try:
-        clustering = DBSCAN(eps=0.1, min_samples=3).fit(df)
+        clustering = DBSCAN(eps=0.05, min_samples=3).fit(df)
 
     
 
@@ -289,61 +289,61 @@ def callback(msg):
 
         # ***************** Dynamic Plot Updating *****************
         # Create figure/axis only once.
-        if firstplottime:
-            plt.ion()
-            fig, ax = plt.subplots()
-            firstplottime = False
+        # if firstplottime:
+        #     plt.ion()
+        #     fig, ax = plt.subplots()
+        #     firstplottime = False
 
-        # Clear the previous axis content.
-        ax.cla()
+        # # Clear the previous axis content.
+        # ax.cla()
         
-        # Plot DBSCAN points.
-        # (Using standard matplotlib scatter for simplicity.)
-        # Use a color palette for distinct cluster colors
-        palette = sns.color_palette("husl", n_colors=len(DBSCAN_dataset['Cluster'].unique()))
-        cluster_labels = sorted(DBSCAN_dataset['Cluster'].unique())
+        # # Plot DBSCAN points.
+        # # (Using standard matplotlib scatter for simplicity.)
+        # # Use a color palette for distinct cluster colors
+        # palette = sns.color_palette("husl", n_colors=len(DBSCAN_dataset['Cluster'].unique()))
+        # cluster_labels = sorted(DBSCAN_dataset['Cluster'].unique())
 
-        for idx, label in enumerate(cluster_labels):
-            cluster_points = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
-            color = 'gray' if label == -1 else palette[idx]  # gray for outliers
-            ax.scatter(cluster_points['x'], cluster_points['y'], s=20, color=color, label=f"Cluster {label}" if label != -1 else "Outliers")
+        # for idx, label in enumerate(cluster_labels):
+        #     cluster_points = DBSCAN_dataset[DBSCAN_dataset['Cluster'] == label]
+        #     color = 'gray' if label == -1 else palette[idx]  # gray for outliers
+        #     ax.scatter(cluster_points['x'], cluster_points['y'], s=20, color=color, label=f"Cluster {label}" if label != -1 else "Outliers")
 
-            # Add cluster label text (skipping outliers)
-            # if label != -1:
-            #     x_mean = cluster_points['x'].mean()
-            #     y_mean = cluster_points['y'].mean()
-            #     ax.text(x_mean, y_mean, str(label), fontsize=10, color='black', ha='center', va='center',
-            #             bbox=dict(facecolor='white', alpha=0.6, edgecolor='black', boxstyle='round,pad=0.2'))
+        #     # Add cluster label text (skipping outliers)
+        #     # if label != -1:
+        #     #     x_mean = cluster_points['x'].mean()
+        #     #     y_mean = cluster_points['y'].mean()
+        #     #     ax.text(x_mean, y_mean, str(label), fontsize=10, color='black', ha='center', va='center',
+        #     #             bbox=dict(facecolor='white', alpha=0.6, edgecolor='black', boxstyle='round,pad=0.2'))
 
         
-        ax.set_xlabel("X Position (meters)")
-        ax.set_ylabel("Y Position (meters)")
-        ax.plot(0, 0, 'o')  # Origin
+        # ax.set_xlabel("X Position (meters)")
+        # ax.set_ylabel("Y Position (meters)")
+        # ax.plot(0, 0, 'o')  # Origin
 
-        # Draw the fitted circles (black outline).
-        for i in fitted_circles:
-            circle = Circle(list(i[0]), i[1], fill=False, edgecolor='black')
-            ax.add_patch(circle)
+        # # Draw the fitted circles (black outline).
+        # for i in fitted_circles:
+        #     circle = Circle(list(i[0]), i[1], fill=False, edgecolor='black')
+        #     ax.add_patch(circle)
 
-        # Draw the circles that pass the threshold (blue outline).
-        for i in people_fitted_circles:
-            center, radius = i
-            circle = Circle(center, radius, fill=False, edgecolor='blue')
-            ax.add_patch(circle)
+        # # Draw the circles that pass the threshold (blue outline).
+        # for i in people_fitted_circles:
+        #     center, radius = i
+        #     circle = Circle(center, radius, fill=False, edgecolor='blue')
+        #     ax.add_patch(circle)
 
-        # Draw circles for the kalman tracked positions (red outline, radius 1).
-        for i in kalmanpositionarray:
-            circle = Circle(i, near_tracking_range, fill=False, color='red')
-            ax.add_patch(circle)
+        # # Draw circles for the kalman tracked positions (red outline, radius 1).
+        # for i in kalmanpositionarray:
+        #     circle = Circle(i, near_tracking_range, fill=False, color='red')
+        #     ax.add_patch(circle)
 
-        # Fix the axes limits.
-        ax.set_xlim(-5, 5)
-        ax.set_ylim(-5, 5)
+        # # Fix the axes limits.
+        # ax.set_xlim(-5, 5)
+        # ax.set_ylim(-5, 5)
         
-        # Update the canvas.
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        plt.pause(0.001)
+        # # Update the canvas.
+        # fig.canvas.draw()
+        # fig.canvas.flush_events()
+        # plt.pause(0.001)
         # ***********************************************************
         #plt.close(fig)
 

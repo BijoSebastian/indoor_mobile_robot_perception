@@ -296,7 +296,7 @@ def callback(image,lidar_detections,scan):
             
             for row, col in assignment:
                 dist = np.linalg.norm(np.array(detected_points[row]) - np.array(cam_detections[col]))
-                print('Distance:!!!!!!!!!!!!!!:',dist)
+                #print('Distance:!!!!!!!!!!!!!!:',dist)
                 # print('row, col:',row, col)
                 # print('obj_detected_Points:',obj_detected_Points)
                 # print(f"Pose {obj_detected_Points[0][row]} in poses1, assigned to poses {cam_detections[col]} in Poses2")
