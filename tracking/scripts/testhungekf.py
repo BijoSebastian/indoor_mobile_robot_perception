@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
+import math
 from geometry_msgs.msg import PoseArray, Pose
 from tracking.msg import PoseIDArray, PoseID
 from sensor_msgs.msg import LaserScan
@@ -10,15 +11,10 @@ class TimedPublisher:
         rospy.init_node('timed_publisher')
 
         self.pose_pub = rospy.Publisher('/PoseFilteredLaser', PoseArray, queue_size=10)
-        #self.scan_pub = rospy.Publisher('/scan', LaserScan, queue_size=10)
-
         self.start_time = rospy.Time.now().to_sec()
-        self.x = 1
 
         # Timer to publish /PoseFilteredLaser every second
-        rospy.Timer(rospy.Duration(1), self.publish_pose_filtered_laser)
-
-        #rospy.Timer(rospy.Duration(0.5), self.publish_scans)
+        rospy.Timer(rospy.Duration(0.5), self.publish_pose_filtered_laser)
 
     def publish_pose_filtered_laser(self, event):
         elapsed_time = rospy.Time.now().to_sec() - self.start_time
@@ -30,42 +26,27 @@ class TimedPublisher:
         msg.header.stamp = rospy.Time.now()
         msg.header.frame_id = "map"
 
-        # Dummy pose data (replace with actual data)
-        #Person 1
-        pose = Pose()
-        pose.position.x = self.x
-        pose.position.y = 0
-        msg.poses.append(pose)
-        print(f'Person 1 position {self.x,0}')
+        radius1 = 1
+        radius = 2  # Radius of the circular path
+        angular_speed = 0.4  # radians per second
+        theta = angular_speed * elapsed_time
 
-        #Person 2
-        if elapsed_time > 5 and elapsed_time < 11 :
-            pose = Pose()
-            pose.position.x = self.x
-            pose.position.y = 1
-            msg.poses.append(pose)
-            print(f'Person 2 position {self.x,1}')
-        
+        # Person 1 - circular motion
+        pose1 = Pose()
+        pose1.position.x = radius * math.cos(theta)
+        pose1.position.y = radius * math.sin(theta)
+        msg.poses.append(pose1)
+        print(f'Person 1 position ({pose1.position.x:.2f}, {pose1.position.y:.2f})')
+
+        # Person 2 - offset circular motion
+        if 5 < elapsed_time < 11:
+            pose2 = Pose()
+            pose2.position.x = radius * math.cos(theta + math.pi/4)
+            pose2.position.y = radius * math.sin(theta + math.pi/4)
+            msg.poses.append(pose2)
+            print(f'Person 2 position ({pose2.position.x:.2f}, {pose2.position.y:.2f})')
 
         self.pose_pub.publish(msg)
-        #rospy.loginfo(f"Published /PoseFilteredLaser={self.x:.1f} at t={elapsed_time:.1f}")
-        self.x+=1
-
-    def publish_scans(self, event):
-        elapsed_time = rospy.Time.now().to_sec() - self.start_time
-
-        if elapsed_time > 25:
-            return  
-
-        msg = LaserScan()
-        msg.header.stamp = rospy.Time.now()
-        msg.header.frame_id = "map"
-
-        # Dummy pose data (replace with actual predictions)
-
-        self.scan_pub.publish(msg)
-        print('Scan published')
-        #rospy.loginfo(f"Published /PredictedPoses={self.x+ 0.5:.1f} at t={elapsed_time:.1f}")
 
 if __name__ == '__main__':
     TimedPublisher()
