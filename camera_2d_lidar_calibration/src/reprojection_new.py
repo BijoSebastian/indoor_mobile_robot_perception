@@ -6,7 +6,6 @@ from cv_bridge import CvBridge, CvBridgeError
 from pyquaternion import Quaternion
 import yaml
 import numpy as np
-import message_filters
 from sensor_msgs.msg import Image, LaserScan, PointCloud2
 from geometry_msgs.msg import PoseArray,Pose
 import laser_geometry.laser_geometry as lg
@@ -188,22 +187,8 @@ def extract_PoseArray(point):
     x=[point.position.x,point.position.y,0]
     return x
 #Callback functions
-def callback(image,lidar_detections,scan):
-    global entertime,exittime
-    print('Callback started!')
-    entertime=time.time()
-    print('Time elapsed:',entertime-exittime)
-    
-    before_callback_time=rospy.Time.now()
-    before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
-    
-    img = bridge.imgmsg_to_cv2(image)
-    img=np.array(img)
-    h=image.height
-    w=image.width
-    img_blank=np.zeros((h,w,3))
-    img=np.vstack((img,img_blank))
-    img = np.uint8(img)
+def scan_callback(scan):
+    global img_points
 
     #Scan part
     #The scan is projected on the image as green circles
@@ -225,6 +210,35 @@ def callback(image,lidar_detections,scan):
     
     img_points = np.squeeze(img_points)
 
+    
+
+def image_callback(image):
+    
+    global img, cam_detections, camposearray
+
+    # Image part
+    img = bridge.imgmsg_to_cv2(image)
+    img=np.array(img)
+    h=image.height
+    w=image.width
+    img_blank=np.zeros((h,w,3))
+    img=np.vstack((img,img_blank))
+    img = np.uint8(img)
+
+    #Image part
+    
+    camposearray,cam_detections=Object_detection_yolo(img) #The positions of people on image is returned as PoseArray and list
+    camposearray.header.stamp=image.header.stamp #Camera Detections have same timestamp as the image itself
+
+def detection_callback(lidar_detections):
+    global entertime,exittime, img, cam_detections, camposearray
+    print('Callback started!')
+    entertime=time.time()
+    print('Time elapsed:',entertime-exittime)
+    
+    before_callback_time=rospy.Time.now()
+    before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
+
     for i in range(len(img_points)):
         try:
             cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
@@ -232,11 +246,6 @@ def callback(image,lidar_detections,scan):
             print('!!!!Error:',err)
             continue
     
-    #Image part
-    
-    camposearray,cam_detections=Object_detection_yolo(img) #The positions of people on image is returned as PoseArray and list
-    camposearray.header.stamp=image.header.stamp #Camera Detections have same timestamp as the image itself
-
     #Detection part
 
     lidar_detection_ptime=lidar_detections.header.stamp
@@ -335,7 +344,11 @@ def callback(image,lidar_detections,scan):
     pub.publish(bridge.cv2_to_imgmsg(img))
     detection_pub.publish(camposearray)
 
-        
+#Global variables
+ 
+img = None
+img_points = np.zeros((0,2))
+cam_detections = []
 
 rospy.init_node('reprojection')
 entertime=time.time()
@@ -428,11 +441,9 @@ pub = rospy.Publisher("/reprojection", Image, queue_size=1)
 detection_pub = rospy.Publisher('/PoseCamera', PoseArray, queue_size=1) #/CameraPoses
 filtered_laser_pub = rospy.Publisher('/PoseFilteredLaser', PoseArray, queue_size=1) 
 
-scan_sub = message_filters.Subscriber(scan_topic, LaserScan, queue_size=1)
-image_sub = message_filters.Subscriber(image_topic, Image, queue_size=1)
-detection_sub = message_filters.Subscriber(detection_topic, PoseArray, queue_size=1) #Added a new subscriber to /LidarPoses Topic
-ts = message_filters.ApproximateTimeSynchronizer([image_sub,detection_sub,scan_sub], 1, time_diff) #
-ts.registerCallback(callback)
+scan_sub = rospy.Subscriber(scan_topic, LaserScan, scan_callback, queue_size=1)
+image_sub = rospy.Subscriber(image_topic, Image,image_callback, queue_size=1)
+detection_sub = rospy.Subscriber(detection_topic, PoseArray, detection_callback, queue_size=1) #Added a new subscriber to /LidarPoses Topic
 rospy.spin()
 
 

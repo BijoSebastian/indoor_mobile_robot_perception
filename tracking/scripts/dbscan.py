@@ -223,7 +223,7 @@ def callback(msg):
 
     df = pd.DataFrame(newscan_rect, columns =['x', 'y'])
     try:
-        clustering = DBSCAN(eps=0.05, min_samples=3).fit(df)
+        clustering = DBSCAN(eps=0.03, min_samples=3).fit(df)
 
     
 
@@ -378,7 +378,7 @@ def main():
     sub = rospy.Subscriber('/scan', LaserScan, callback)
     sub2 = rospy.Subscriber('/kalmanposeArray', PoseIDArray, kalmancallback)
 
-    pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=10)
+    pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=1)
     
     rospy.spin()
         
