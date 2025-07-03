@@ -1,6 +1,6 @@
 <launch>
 
-    <node name="reprojection" pkg="camera_2d_lidar_calibration" type="reprojection.py" output="screen">
+    <node name="reprojection" pkg="camera_2d_lidar_calibration" type="reprojection_faster.py" output="screen">
         <param name="scan_topic" value="/scan" />
         <!-- <param name="scan_topic" value="/hokuyo" > -->
         <param name="image_topic" value="usb_cam/image_rect_color" />

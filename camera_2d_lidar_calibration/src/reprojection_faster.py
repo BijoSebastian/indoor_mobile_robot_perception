@@ -6,7 +6,6 @@ from cv_bridge import CvBridge, CvBridgeError
 from pyquaternion import Quaternion
 import yaml
 import numpy as np
-import message_filters
 from sensor_msgs.msg import Image, LaserScan, PointCloud2
 from geometry_msgs.msg import PoseArray,Pose
 import laser_geometry.laser_geometry as lg
@@ -159,11 +158,11 @@ def Object_detection_yolo(img):
                 posearray.poses.append(pose)
                 cam_detections.append([center_x,center_y])
             
-    for i in range(len(posearray.poses)):
-        try:
-            cv2.circle(img, (int(round(posearray.poses[i].position.x)),int(round(posearray.poses[i].position.y))), detection_point_radius, (255,0,0), -1)
-        except :
-            continue
+    # for i in range(len(posearray.poses)):
+    #     try:
+    #         cv2.circle(img, (int(round(posearray.poses[i].position.x)),int(round(posearray.poses[i].position.y))), detection_point_radius, (255,0,0), -1)
+    #     except :
+    #         continue
 
     return posearray,cam_detections
 
@@ -188,15 +187,36 @@ def extract_PoseArray(point):
     x=[point.position.x,point.position.y,0]
     return x
 #Callback functions
-def callback(image,lidar_detections,scan):
-    global entertime,exittime
-    print('Callback started!')
-    entertime=time.time()
-    print('Time elapsed:',entertime-exittime)
+# def scan_callback(scan):
+#     global img_points
+
+#     #Scan part
+#     #The scan is projected on the image as green circles
+#     cloud = lp.projectLaser(scan)
+#     points = pc2.read_points(cloud)
+#     objPoints = np.array([extract(point) for point in points])
     
-    before_callback_time=rospy.Time.now()
-    before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
+#     Z = get_z(q, objPoints, K)
     
+#     objPoints = objPoints[Z > 0]
+    
+#     if lens == 'pinhole':
+#         img_points, _ = cv2.projectPoints(objPoints, rvec, tvec, K, D)
+        
+#     elif lens == 'fisheye':
+#         objPoints = np.reshape(objPoints, (1,objPoints.shape[0],objPoints.shape[1]))
+#         img_points, _ = cv2.fisheye.projectPoints(objPoints, rvec, tvec, K, D)
+        
+    
+#     img_points = np.squeeze(img_points)
+
+    
+
+def image_callback(image):
+    
+    global img, cam_detections, camposearray
+
+    # Image part
     img = bridge.imgmsg_to_cv2(image)
     img=np.array(img)
     h=image.height
@@ -205,45 +225,34 @@ def callback(image,lidar_detections,scan):
     img=np.vstack((img,img_blank))
     img = np.uint8(img)
 
-    #Scan part
-    #The scan is projected on the image as green circles
-    cloud = lp.projectLaser(scan)
-    points = pc2.read_points(cloud)
-    objPoints = np.array([extract(point) for point in points])
-    
-    Z = get_z(q, objPoints, K)
-    
-    objPoints = objPoints[Z > 0]
-    
-    if lens == 'pinhole':
-        img_points, _ = cv2.projectPoints(objPoints, rvec, tvec, K, D)
-        
-    elif lens == 'fisheye':
-        objPoints = np.reshape(objPoints, (1,objPoints.shape[0],objPoints.shape[1]))
-        img_points, _ = cv2.fisheye.projectPoints(objPoints, rvec, tvec, K, D)
-        
-    
-    img_points = np.squeeze(img_points)
-
-    for i in range(len(img_points)):
-        try:
-            cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
-        except Exception as err:
-            print('!!!!Error:',err)
-            continue
-    
     #Image part
     
     camposearray,cam_detections=Object_detection_yolo(img) #The positions of people on image is returned as PoseArray and list
     camposearray.header.stamp=image.header.stamp #Camera Detections have same timestamp as the image itself
 
+def detection_callback(lidar_detections):
+    global entertime,exittime, img, cam_detections, camposearray
+    print('Callback started!')
+    entertime=time.time()
+    print('Time elapsed:',entertime-exittime)
+    
+    before_callback_time=rospy.Time.now()
+    before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
+
+    # for i in range(len(img_points)):
+    #     try:
+    #         cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
+    #     except Exception as err:
+    #         print('!!!!Error:',err)
+    #         continue
+    
     #Detection part
 
     lidar_detection_ptime=lidar_detections.header.stamp
 
     paired_pose_array=[]
     filtered_pose_array=PoseArray()
-    filtered_pose_array.header= Header(stamp=lidar_detection_ptime,frame_id='base_frame') #Filtered poses time will be the detections time. And detections time is the scans time.s
+    filtered_pose_array.header= Header(stamp=lidar_detection_ptime,frame_id='lidar') #Filtered poses time will be the detections time. And detections time is the scans time.s
 
     obj_detected_Points = np.array([extract_PoseArray(point) for point in lidar_detections.poses])
     if(len(obj_detected_Points)!=0):
@@ -273,14 +282,14 @@ def callback(image,lidar_detections,scan):
             
             detected_points = np.round(np.squeeze(detected_points))
             detected_points=detected_points.astype(int)
-            for i in range(len(detected_points)):
-                    if not np.isscalar(detected_points[i]):  # Check if not a scalar
-                        if len(detected_points[i]) == 2:
-                            cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
-                        else:
-                            print(f"!!!!Error: detected_points[{i}] is not a valid 2D tuple. Skipping circle.!!!!")
-                    else:
-                        print(f"!!!!Error: detected_points[{i}] is a scalar after projection. Skipping circle.!!!!")
+            # for i in range(len(detected_points)):
+            #         if not np.isscalar(detected_points[i]):  # Check if not a scalar
+            #             if len(detected_points[i]) == 2:
+            #                 cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
+            #             else:
+            #                 print(f"!!!!Error: detected_points[{i}] is not a valid 2D tuple. Skipping circle.!!!!")
+            #         else:
+            #             print(f"!!!!Error: detected_points[{i}] is a scalar after projection. Skipping circle.!!!!")
 
 
                     
@@ -308,10 +317,10 @@ def callback(image,lidar_detections,scan):
                     print(dist)
                     print(f"Skipping association between {detected_points[row]} and {cam_detections[col]} due to large distance: {dist}")
                     continue
-                if isinstance(detected_points[row], (list, np.ndarray)):
-                    cv2.line(img, detected_points[row], cam_detections[col], (255, 255, 0) , 5) 
-                else:
-                    cv2.line(img, detected_points, cam_detections[col], (255, 255, 0) , 5)
+                # if isinstance(detected_points[row], (list, np.ndarray)):
+                #     cv2.line(img, detected_points[row], cam_detections[col], (255, 255, 0) , 5) 
+                # else:
+                #     cv2.line(img, detected_points, cam_detections[col], (255, 255, 0) , 5)
 
                 paired_pose=[obj_detected_Points[0][row],cam_detections[col]] #[Laser detections, camera detections]
                 paired_pose_array.append(paired_pose)
@@ -332,10 +341,14 @@ def callback(image,lidar_detections,scan):
     
 
     filtered_laser_pub.publish(filtered_pose_array)
-    pub.publish(bridge.cv2_to_imgmsg(img))
+    #pub.publish(bridge.cv2_to_imgmsg(img))
     detection_pub.publish(camposearray)
 
-        
+#Global variables
+ 
+img = None
+img_points = np.zeros((0,2))
+cam_detections = []
 
 rospy.init_node('reprojection')
 entertime=time.time()
@@ -428,11 +441,9 @@ pub = rospy.Publisher("/reprojection", Image, queue_size=1)
 detection_pub = rospy.Publisher('/PoseCamera', PoseArray, queue_size=1) #/CameraPoses
 filtered_laser_pub = rospy.Publisher('/PoseFilteredLaser', PoseArray, queue_size=1) 
 
-scan_sub = message_filters.Subscriber(scan_topic, LaserScan, queue_size=1)
-image_sub = message_filters.Subscriber(image_topic, Image, queue_size=1)
-detection_sub = message_filters.Subscriber(detection_topic, PoseArray, queue_size=1) #Added a new subscriber to /LidarPoses Topic
-ts = message_filters.ApproximateTimeSynchronizer([image_sub,detection_sub,scan_sub], 1, time_diff) #
-ts.registerCallback(callback)
+#scan_sub = rospy.Subscriber(scan_topic, LaserScan, scan_callback, queue_size=1)
+image_sub = rospy.Subscriber(image_topic, Image,image_callback, queue_size=1)
+detection_sub = rospy.Subscriber(detection_topic, PoseArray, detection_callback, queue_size=1) #Added a new subscriber to /LidarPoses Topic
 rospy.spin()
 
 

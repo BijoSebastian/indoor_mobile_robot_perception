@@ -12,10 +12,10 @@ from nav_msgs.msg import Path
 from tracking.msg import PoseIDArray,PoseID
 from std_msgs.msg import Header
 import time
-import tf
 import tf2_ros
 import tf2_geometry_msgs
 from geometry_msgs.msg import PoseStamped
+import message_filters
 
 #Functions
 
@@ -280,26 +280,25 @@ class person:
         self.ctime=meas[2]
 
 
-def pose_callback(robot_pose):
-    #Here using the robot pose, the kalman pose needs to transformed to global frame.
-    #publish it to /globalkalmanposearray topic using PoseIDArray msg
+# def pose_callback(robot_pose):
+#     #Here using the robot pose, the kalman pose needs to transformed to global frame.
+#     #publish it to /globalkalmanposearray topic using PoseIDArray msg
 
-    global robot_position
-
-
-    robot_position = robot_pose
+#     global robot_position
 
 
+#     robot_position = robot_pose
 
 
 
-def callback(filtered_pose_array):
+
+
+def callback(filtered_pose_array,robot_position):
     
-    global kalmanpredpose_array,predicted_list, robot_position
+    global kalmanpredpose_array,predicted_list
     
     predicted_xy_list=[]
     ids=[]
-    prev_robot_yaw = 0
 
     #Make predictions as a global list
     for i in predicted_list:
@@ -565,9 +564,6 @@ def callback(filtered_pose_array):
                 # Transform to global frame
                 #global_x = (robot_x + (local_x * math.cos(robot_yaw)) - (local_y * math.sin(robot_yaw)))
                 #global_y = (robot_y + (local_x * math.sin(robot_yaw)) + (local_y * math.cos(robot_yaw)))
-
-                # if abs(robot_yaw - prev_robot_yaw) >= 0.25 :
-                #     robot_yaw = prev_robot_yaw
                 
                  
 
@@ -580,10 +576,8 @@ def callback(filtered_pose_array):
                 # global_y = (robot_y + (local_x * math.sin(robot_yaw)) + (local_y * math.cos(robot_yaw)))
                 #+ np.pi
 
-                global_yaw = robot_yaw + local_yaw #+ np.pi
+                global_yaw = robot_yaw + local_yaw 
                 global_yaw = (global_yaw + math.pi) % (2 * math.pi) - math.pi  
-
-                
                 
 
                 # print('global_x:',global_x)
@@ -617,8 +611,6 @@ def callback(filtered_pose_array):
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
         global_kalman_pose_pub.publish(globalposearray)
 
-    prev_robot_yaw = robot_yaw
-    
     kalman_pose_pub.publish(kalmanpose_array)
     measurepub.publish(ided_posemsg_array)
     #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
@@ -635,9 +627,14 @@ def main():
     
     rospy.init_node('Kalman_filter')
 
-    measurement_sub = rospy.Subscriber('/PoseFilteredLaser', PoseArray, callback,queue_size=1)
+    # measurement_sub = rospy.Subscriber('/PoseFilteredLaser', PoseArray, callback,queue_size=1)
 
-    robot_pose_sub = rospy.Subscriber('/pose_ekf', PoseWithCovarianceStamped, pose_callback,queue_size=1)
+    # robot_pose_sub = rospy.Subscriber('/pose_ekf', PoseWithCovarianceStamped, pose_callback,queue_size=1)
+
+    measurement_sub  = message_filters.Subscriber('/PoseFilteredLaser', PoseArray, queue_size=1)
+    robot_pose_sub= message_filters.Subscriber('/pose_ekf', PoseWithCovarianceStamped, queue_size=1)
+    ts = message_filters.ApproximateTimeSynchronizer([measurement_sub,robot_pose_sub], 1, 1) #
+    ts.registerCallback(callback)
 
     kalman_pose_pub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=1)
 
