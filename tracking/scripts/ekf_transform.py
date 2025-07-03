@@ -6,6 +6,7 @@ import math
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+import tf.transformations
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose,PoseArray,PoseWithCovarianceStamped
 from nav_msgs.msg import Path
@@ -16,6 +17,7 @@ import tf
 import tf2_ros
 import tf2_geometry_msgs
 from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import TransformStamped
 
 #Functions
 
@@ -289,6 +291,26 @@ def pose_callback(robot_pose):
 
     robot_position = robot_pose
 
+    x = robot_pose.pose.pose.position.x
+    y = robot_pose.pose.pose.position.y
+    q = robot_pose.pose.pose.orientation
+    (_,_,yaw) = tf.transformations.euler_from_quaternion([q.x,q.y,q.z,q.w])
+
+    t = TransformStamped()
+    t.header.stamp = robot_pose.header.stamp
+    t.header.frame_id = "map"
+    t.child_frame_id = "base_frame"
+    t.transform.translation.x = x
+    t.transform.translation.y = y
+    t.transform.translation.z = 0
+    quat = tf.transformations.quaternion_from_euler(0,0,yaw)
+    t.transform.rotation.x = quat[0]
+    t.transform.rotation.y = quat[1]
+    t.transform.rotation.z = quat[2]
+    t.transform.rotation.w = quat[3]
+
+    tf_br.sendTransform(t)
+
 
 
 
@@ -299,7 +321,7 @@ def callback(filtered_pose_array):
     
     predicted_xy_list=[]
     ids=[]
-    prev_robot_yaw = 0
+    #prev_robot_yaw = 0
 
     #Make predictions as a global list
     for i in predicted_list:
@@ -551,11 +573,17 @@ def callback(filtered_pose_array):
                 # Peforming transform from Lidar to robot frame (USBCAM frame)
                 #local_x,local_y,local_z= transform_frame1_to_frame2(lidarlocalpose,[np.pi/2,np.pi/2,0],[0,0,0])
 
-                localpose = Pose()
+                localpose = PoseStamped()
+                localpose.header.stamp = filtered_pose_array.header.stamp
+                localpose.header.frame_id = "lidar"
                 #localpose.header= Header(stamp=rospy.Time.now(),frame_id='usb_cam')
-                localpose.position.x = local_x
-                localpose.position.y = local_y
-                localpose.position.z = 0
+                localpose.pose.position.x = local_x
+                localpose.pose.position.y = local_y
+                localpose.pose.position.z = 0
+
+                # orientation for the person’s heading:
+                localpose.pose.orientation.z = math.sin(human.Xc[2][0] / 2.0)
+                localpose.pose.orientation.w = math.cos(human.Xc[2][0] / 2.0)
 
                 #local_y = local_y
                 # temp = local_y
@@ -568,56 +596,36 @@ def callback(filtered_pose_array):
 
                 # if abs(robot_yaw - prev_robot_yaw) >= 0.25 :
                 #     robot_yaw = prev_robot_yaw
-                
-                 
 
-                global_x,global_y,global_z = transform_frame1_to_frame2(lidarlocalpose,[0,0,np.pi+robot_yaw],[robot_x,robot_y,0])
-                #global_x,global_y,global_z = transform_frame1_to_frame2(lidarlocalpose,[0,0,np.pi],[robot_x,robot_y,0])
+                try:
+                    tf_msg = tf_buffer.lookup_transform("map","lidar",localpose.header.stamp,rospy.Duration(0.2))
 
-                #global_x,global_y,global_z = transform_frame1_to_frame2(lidarlocalpose,[0,0,robot_yaw],[robot_x,robot_y,0])
-
-                # global_x = (robot_x + (local_x * math.cos(robot_yaw)) - (local_y * math.sin(robot_yaw)))
-                # global_y = (robot_y + (local_x * math.sin(robot_yaw)) + (local_y * math.cos(robot_yaw)))
-                #+ np.pi
-
-                global_yaw = robot_yaw + local_yaw #+ np.pi
-                global_yaw = (global_yaw + math.pi) % (2 * math.pi) - math.pi  
-
-                
-                
-
-                # print('global_x:',global_x)
-                # print('global_y:',global_y)
-                # print('global_z:',global_z)
-                # print('global_yaw:',global_yaw)
-
-                # temp = global_x
-                # global_x = global_y
-                # global_y = temp
-                #global_y = global_z
-                # global_x = global_z
-                # global_y = -global_y
+                    globalpose = tf2_geometry_msgs.do_transform_pose(localpose,tf_msg)
 
 
-                #Transform to global coordinates
+                    #Transform to global coordinates
 
-                globalpose = PoseID()
-                globalpose.ID = human.id
-                globalpose.pose.position.x = global_x
-                globalpose.pose.position.y = global_y
-                globalpose.pose.orientation.z=global_yaw
-                globalpose.pose.position.z= human.Xc[3][0] # I m using z position to store linear velocity
-                globalpose.pose.orientation.x=human.Xc[4][0] # I m using z position to store angular velocity
-                #print('v:',human.Xc[3][0])
+                    globalposeid = PoseID()
+                    globalposeid.ID = human.id
+                    globalposeid.pose.position.x = globalpose.pose.position.x
+                    globalposeid.pose.position.y = globalpose.pose.position.y
+                    _,_,yaw= tf.transformations.euler_from_quaternion([0,0,globalpose.pose.orientation.z,globalpose.pose.orientation.w])
+                    globalposeid.pose.orientation.z = yaw
+                    globalposeid.pose.position.z= human.Xc[3][0] # I m using z position to store linear velocity
+                    globalposeid.pose.orientation.x=human.Xc[4][0] # I m using z position to store angular velocity
+                    #print('v:',human.Xc[3][0])
 
-                globalposearray.poses.append(globalpose)
-                intermediateposearray.poses.append(localpose)
+                    globalposearray.poses.append(globalposeid)
+                    intermediateposearray.poses.append(localpose)
+
+                except (tf2_ros.LookupException, tf2_ros.ConnectivityException,tf2_ros.ExtrapolationException) as e:
+                    rospy.logwarn("TF lookup failed: %s", e)
 
         intermediate_kalman_pose_pub.publish(intermediateposearray)
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
         global_kalman_pose_pub.publish(globalposearray)
 
-    prev_robot_yaw = robot_yaw
+    #prev_robot_yaw = robot_yaw
     
     kalman_pose_pub.publish(kalmanpose_array)
     measurepub.publish(ided_posemsg_array)
@@ -625,7 +633,7 @@ def callback(filtered_pose_array):
 
 def main():
     global kalman_pose_pub,kalman_predicted_pose_pub,people, predicted_list, measurepub, robot_position,global_kalman_pose_pub,intermediate_kalman_pose_pub
-    global tf_buffer
+    global tf_buffer, tf_br
 
     #Initial Condition    
 
@@ -651,6 +659,28 @@ def main():
 
     tf_buffer = tf2_ros.Buffer()
     tf_listener = tf2_ros.TransformListener(tf_buffer)
+    tf_br = tf2_ros.TransformBroadcaster()
+
+    static_br = tf2_ros.StaticTransformBroadcaster()
+    rospy.sleep(0.1)
+
+    static_t = TransformStamped()
+    static_t.header.stamp = rospy.Time.now()
+    static_t.header.frame_id = "base_frame"
+    static_t.child_frame_id = "lidar"
+
+    static_t.transform.translation.x = 0
+    static_t.transform.translation.y = 0
+    static_t.transform.translation.z = 0
+
+    quat = tf.transformations.quaternion_from_euler(0,0,math.pi)
+    static_t.transform.rotation.x = quat[0]
+    static_t.transform.rotation.y = quat[1]
+    static_t.transform.rotation.z = quat[2]
+    static_t.transform.rotation.w = quat[3]
+
+    static_br.sendTransform(static_t)
+
 
 
     rospy.spin()
