@@ -535,8 +535,8 @@ def callback(filtered_pose_array):
             globalposearray = PoseIDArray()
             globalposearray.header= Header(stamp=new_time,frame_id='map')
 
-            intermediateposearray = PoseArray()
-            intermediateposearray.header= Header(stamp=new_time,frame_id='usb_cam')
+            # intermediateposearray = PoseArray()
+            # intermediateposearray.header= Header(stamp=new_time,frame_id='usb_cam')
 
             for human in people:
 
@@ -616,12 +616,12 @@ def callback(filtered_pose_array):
                     #print('v:',human.Xc[3][0])
 
                     globalposearray.poses.append(globalposeid)
-                    intermediateposearray.poses.append(localpose)
+                    #intermediateposearray.poses.append(localpose)
 
                 except (tf2_ros.LookupException, tf2_ros.ConnectivityException,tf2_ros.ExtrapolationException) as e:
                     rospy.logwarn("TF lookup failed: %s", e)
 
-        intermediate_kalman_pose_pub.publish(intermediateposearray)
+        #intermediate_kalman_pose_pub.publish(intermediateposearray)
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
         global_kalman_pose_pub.publish(globalposearray)
 
@@ -651,12 +651,14 @@ def main():
 
     global_kalman_pose_pub=rospy.Publisher('/globalkalmanposeArray',PoseIDArray,queue_size=1)
 
-    intermediate_kalman_pose_pub=rospy.Publisher('/intermediatekalmanpose',PoseArray,queue_size=1)
+    # intermediate_kalman_pose_pub=rospy.Publisher('/intermediatekalmanpose',PoseArray,queue_size=1)
 
     kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=1)
     
     measurepub=rospy.Publisher('/Measurements',PoseIDArray,queue_size=1)
 
+    # tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(20.0))  # <-- Buffer duration in seconds
+    # tf_istener = tf2_ros.TransformListener(tf_buffer)
     tf_buffer = tf2_ros.Buffer()
     tf_listener = tf2_ros.TransformListener(tf_buffer)
     tf_br = tf2_ros.TransformBroadcaster()
