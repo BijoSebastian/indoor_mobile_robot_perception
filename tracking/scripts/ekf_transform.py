@@ -427,6 +427,7 @@ def callback(filtered_pose_array):
                 present_position=np.array([meas[0],meas[1]])
                 prev_position=np.array([j.Xc[0][0],j.Xc[1][0]])
                 (j).measurement_update(meas)
+                j.ptime = present_time
                 print(f'Position of person {j.id} is {[j.Xc[0][0],j.Xc[1][0]]}')
                 print(f'Heading of person {j.id} is {j.Xc[2][0]}')
                 print(f'Velocity of person {j.id} is {[j.Xc[3][0],j.Xc[4][0]]}')
@@ -456,7 +457,7 @@ def callback(filtered_pose_array):
             id_new=person.last_id+1
             person.last_id+=1
             iterations_new=0
-            ptime=p_time_sec
+            ptime = present_time
             print('New ID:',id_new)
             people.append(person(Xc_new,Xp_new,P_new,rev_new,id_new,iterations_new,ptime))
 
@@ -476,7 +477,7 @@ def callback(filtered_pose_array):
     #Making kalman pose array for publishing
     for i in people:
         kalmanpose=PoseID()
-        kalmanpose.header.stamp=present_time
+        kalmanpose.header.stamp=i.ptime
         kalmanpose.ID=i.id
         kalmanpose.pose.position.x=i.Xc[0][0]
         kalmanpose.pose.position.y=i.Xc[1][0]
@@ -533,10 +534,10 @@ def callback(filtered_pose_array):
             robot_yaw = (math.atan2(siny_cosp, cosy_cosp))
 
             globalposearray = PoseIDArray()
-            globalposearray.header= Header(stamp=new_time,frame_id='map')
+            globalposearray.header= Header(stamp=filtered_pose_array.header.stamp,frame_id='map')
 
             intermediateposearray = PoseArray()
-            intermediateposearray.header= Header(stamp=new_time,frame_id='usb_cam')
+            intermediateposearray.header= Header(stamp=filtered_pose_array.header.stamp,frame_id='usb_cam')
 
             for human in people:
 
@@ -574,7 +575,7 @@ def callback(filtered_pose_array):
                 #local_x,local_y,local_z= transform_frame1_to_frame2(lidarlocalpose,[np.pi/2,np.pi/2,0],[0,0,0])
 
                 localpose = PoseStamped()
-                localpose.header.stamp = filtered_pose_array.header.stamp
+                localpose.header.stamp = human.ptime
                 localpose.header.frame_id = "lidar"
                 #localpose.header= Header(stamp=rospy.Time.now(),frame_id='usb_cam')
                 localpose.pose.position.x = local_x
