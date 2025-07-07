@@ -624,11 +624,12 @@ def callback(filtered_pose_array):
         #intermediate_kalman_pose_pub.publish(intermediateposearray)
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
         global_kalman_pose_pub.publish(globalposearray)
+        kalman_pose_pub.publish(kalmanpose_array)
+        measurepub.publish(ided_posemsg_array)
 
     #prev_robot_yaw = robot_yaw
     
-    kalman_pose_pub.publish(kalmanpose_array)
-    measurepub.publish(ided_posemsg_array)
+    
     #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
 def main():
