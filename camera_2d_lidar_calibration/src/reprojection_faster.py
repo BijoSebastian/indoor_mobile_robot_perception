@@ -339,8 +339,8 @@ def detection_callback(lidar_detections):
 
     exittime=time.time()
     
-
-    filtered_laser_pub.publish(filtered_pose_array)
+    if len(filtered_pose_array.poses):
+        filtered_laser_pub.publish(filtered_pose_array)
     #pub.publish(bridge.cv2_to_imgmsg(img))
     detection_pub.publish(camposearray)
 

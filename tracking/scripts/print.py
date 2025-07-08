@@ -9,6 +9,7 @@ import tf.transformations as tf_trans
 def poseekf_callback(msg):
     
     ori = msg.pose.pose.orientation
+    
     # Convert quaternion to Euler angles
     quaternion = [ori.x, ori.y, ori.z, ori.w]
     roll, pitch, yaw = tf_trans.euler_from_quaternion(quaternion)
