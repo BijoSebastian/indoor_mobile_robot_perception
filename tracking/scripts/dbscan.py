@@ -359,6 +359,7 @@ def callback(msg):
     #exittime=time.time()
     
     #print('time taken:',exittime-entertime)
+    # time taken = 0.04s
 
     previous_scan = current_scan
     
@@ -375,7 +376,7 @@ def main():
     firstplottime=True
     rospy.init_node('DBSCAN_Clustering')
     
-    sub = rospy.Subscriber('/scan', LaserScan, callback)
+    sub = rospy.Subscriber('/scan', LaserScan, callback, queue_size=1)
     sub2 = rospy.Subscriber('/kalmanposeArray', PoseIDArray, kalmancallback)
 
     pose_lidar_pub=rospy.Publisher('/PoseLidar',PoseArray,queue_size=1)

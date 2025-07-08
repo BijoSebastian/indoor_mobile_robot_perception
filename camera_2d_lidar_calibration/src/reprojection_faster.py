@@ -233,8 +233,9 @@ def image_callback(image):
 def detection_callback(lidar_detections):
     global entertime,exittime, img, cam_detections, camposearray
     print('Callback started!')
+
     entertime=time.time()
-    print('Time elapsed:',entertime-exittime)
+    
     
     before_callback_time=rospy.Time.now()
     before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
@@ -259,12 +260,17 @@ def detection_callback(lidar_detections):
         Z_detections = get_z(q, obj_detected_Points, K)
         obj_detected_Points=obj_detected_Points[Z_detections>0]
 
-        if ((not np.any(obj_detected_Points)) or (not np.any(cam_detections))):
-            print("!!!!No detected points from LiDAR or Camera. Skipping projection of detected points.!!!!")
+        if ((not np.any(obj_detected_Points))):
+            print("!!!!No detected points from LiDAR. Skipping projection of detected points.!!!!")
+
+        if ((not np.any(cam_detections))):
+            print("!!!!No detected points from Camera. Skipping projection of detected points.!!!!")
+
 
         else:
         
             #try:
+            
             if lens == 'pinhole':
                 #Detections Projection
                 detected_points, _ = cv2.projectPoints(obj_detected_Points, rvec, tvec, K, D)
@@ -279,6 +285,8 @@ def detection_callback(lidar_detections):
                     obj_detected_Points=obj_detected_Points[0]
                 obj_detected_Points = np.reshape(obj_detected_Points, (1,obj_detected_Points.shape[0],obj_detected_Points.shape[1]))
                 detected_points, _ = cv2.fisheye.projectPoints(obj_detected_Points, rvec, tvec, K, D)
+
+                
             
             detected_points = np.round(np.squeeze(detected_points))
             detected_points=detected_points.astype(int)
@@ -293,12 +301,16 @@ def detection_callback(lidar_detections):
 
 
                     
-
+            
+            
             cost=cost_matrix(detected_points,cam_detections)
+
             
 
             #Solve the assignment problem
             row_indices, col_indices = linear_sum_assignment(cost)
+
+            
 
             # # Extract the optimal assignment
             assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
@@ -338,11 +350,16 @@ def detection_callback(lidar_detections):
     time_elapse=after_callback_time_sec-before_callback_time_sec
 
     exittime=time.time()
+    print('Time elapsed:',exittime-entertime)
+
+    #Time elapse is 0.0015
+
+    
     
     if len(filtered_pose_array.poses):
         filtered_laser_pub.publish(filtered_pose_array)
     #pub.publish(bridge.cv2_to_imgmsg(img))
-    detection_pub.publish(camposearray)
+    #detection_pub.publish(camposearray)
 
 #Global variables
  
