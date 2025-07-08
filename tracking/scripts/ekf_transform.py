@@ -500,7 +500,7 @@ def callback(filtered_pose_array):
     if people:
         for i in people:
             print("PREDICTING...")
-            time_elapsed=current_time-i.ptime
+            time_elapsed=current_time-((i.ptime).to_nsec()*(10**(-9))) #Time in seconds
             i.prediction(time_elapsed)
             predpose = PoseID()
             predpose.ID = i.id
