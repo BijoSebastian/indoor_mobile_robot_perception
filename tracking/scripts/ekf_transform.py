@@ -415,6 +415,35 @@ def callback(filtered_pose_array):
         pose=[t[2],t[0],t[1],p_time_sec]
         pose_list.append(pose)
 
+    measglobalposearray = []
+
+    for i in pose_list:
+
+        meas_x = i[1]
+        meas_y = i[2]
+
+        measposestamp = PoseStamped()
+        measposestamp.header.stamp = present_time
+        measposestamp.header.frame_id = "lidar"
+        #measpose.header= Header(stamp=rospy.Time.now(),frame_id='usb_cam')
+        measposestamp.pose.position.x = meas_x
+        measposestamp.pose.position.y = meas_y
+        measposestamp.pose.position.z = 0
+        try:
+                    tf_msg = tf_buffer.lookup_transform("map","lidar",present_time,rospy.Duration(0.2))
+
+                    measglobalpose = tf2_geometry_msgs.do_transform_pose(measposestamp,tf_msg)
+
+                    measglobalpose_list = [i[0],measglobalpose.pose.position.x,measglobalpose.pose.position.y,p_time_sec]
+
+                    measglobalposearray.append(measglobalpose_list)
+                    #intermediateposearray.poses.append(localpose)
+
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException,tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn("TF lookup failed: %s", e)
+
+    pose_list = measglobalposearray
+
 
     for i in pose_list:
         meas=i[1:4]
@@ -570,21 +599,21 @@ def callback(filtered_pose_array):
                 local_y=human.Xc[1][0]*1000
                 local_yaw=human.Xc[2][0]
 
-                lidarlocalpose = [local_x,local_y,0]
-                # Peforming transform from Lidar to robot frame (USBCAM frame)
-                #local_x,local_y,local_z= transform_frame1_to_frame2(lidarlocalpose,[np.pi/2,np.pi/2,0],[0,0,0])
+                # lidarlocalpose = [local_x,local_y,0]
+                # # Peforming transform from Lidar to robot frame (USBCAM frame)
+                # #local_x,local_y,local_z= transform_frame1_to_frame2(lidarlocalpose,[np.pi/2,np.pi/2,0],[0,0,0])
 
-                localpose = PoseStamped()
-                localpose.header.stamp = human.ptime
-                localpose.header.frame_id = "lidar"
-                #localpose.header= Header(stamp=rospy.Time.now(),frame_id='usb_cam')
-                localpose.pose.position.x = local_x
-                localpose.pose.position.y = local_y
-                localpose.pose.position.z = 0
+                # localpose = PoseStamped()
+                # localpose.header.stamp = human.ptime
+                # localpose.header.frame_id = "lidar"
+                # #localpose.header= Header(stamp=rospy.Time.now(),frame_id='usb_cam')
+                # localpose.pose.position.x = local_x
+                # localpose.pose.position.y = local_y
+                # localpose.pose.position.z = 0
 
-                # orientation for the person’s heading:
-                localpose.pose.orientation.z = math.sin(human.Xc[2][0] / 2.0)
-                localpose.pose.orientation.w = math.cos(human.Xc[2][0] / 2.0)
+                # # orientation for the person’s heading:
+                # localpose.pose.orientation.z = math.sin(human.Xc[2][0] / 2.0)
+                # localpose.pose.orientation.w = math.cos(human.Xc[2][0] / 2.0)
 
                 #local_y = local_y
                 # temp = local_y
@@ -599,18 +628,19 @@ def callback(filtered_pose_array):
                 #     robot_yaw = prev_robot_yaw
 
                 try:
-                    tf_msg = tf_buffer.lookup_transform("map","lidar",localpose.header.stamp,rospy.Duration(0.2))
+                    # tf_msg = tf_buffer.lookup_transform("map","lidar",localpose.header.stamp,rospy.Duration(0.2))
 
-                    globalpose = tf2_geometry_msgs.do_transform_pose(localpose,tf_msg)
+                    # globalpose = tf2_geometry_msgs.do_transform_pose(localpose,tf_msg)
 
 
                     #Transform to global coordinates
 
                     globalposeid = PoseID()
                     globalposeid.ID = human.id
-                    globalposeid.pose.position.x = globalpose.pose.position.x
-                    globalposeid.pose.position.y = globalpose.pose.position.y
-                    _,_,yaw= tf.transformations.euler_from_quaternion([0,0,globalpose.pose.orientation.z,globalpose.pose.orientation.w])
+                    globalposeid.pose.position.x = human.Xc[0][0]*1000
+                    globalposeid.pose.position.y = human.Xc[1][0]*1000
+                    #_,_,yaw= tf.transformations.euler_from_quaternion([0,0,globalpose.pose.orientation.z,globalpose.pose.orientation.w])
+                    yaw = local_yaw
                     globalposeid.pose.orientation.z = yaw
                     globalposeid.pose.position.z= human.Xc[3][0] # I m using z position to store linear velocity
                     globalposeid.pose.orientation.x=human.Xc[4][0] # I m using z position to store angular velocity
