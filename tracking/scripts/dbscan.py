@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# Import necessary libraries
 import rospy
 import pandas as pd
 from sklearn.cluster import DBSCAN
@@ -40,11 +41,15 @@ lidar_poses=PoseArray()
 lidar_poses.poses=[]
 
 def circle_residuals(params, x, y):
+    # params contains [h, k, r] where (h, k) is the center and r is the radius
+    # Calculate the residuals for the circle equation (x - h)^2 + (y - k)^2 = r^2
     h, k, r = params
     return np.sqrt((x - h)**2 + (y - k)**2) - r
 
 def fit_circle(x, y):
-    
+    # Fit a circle to the points (x, y) using least squares optimization
+
+    # Initial guess for the circle parameters
     h_guess = np.mean(x)  # Mean of x coordinates
     k_guess = np.mean(y)  # Mean of y coordinates
     r_guess = np.max(np.sqrt((x - h_guess)**2 + (y - k_guess)**2))  # Max distance from center
@@ -54,6 +59,11 @@ def fit_circle(x, y):
     return [h, k], r
 
 def fit_clusters_into_circles2(clusters):
+
+    # Fit clusters into circles using the fit_circle function
+    # This function takes a list of clusters, where each cluster is a list of points in polar coordinates (range, angle)
+    # It returns a list of fitted circles, where each circle is represented by its center and radius
+    # Note: Here centre is not the centre of the fitted circle, but the mean of the x and y coordinates of the points in the cluster
     fitted_circles = []
 
     for cluster in clusters:
@@ -76,95 +86,18 @@ def fit_clusters_into_circles2(clusters):
 
     return fitted_circles
 
-def avg_cluster(clusters):
-    avgs=[]
-
-    for cluster in clusters:
-
-        
-        polar_cluster = np.array(cluster,dtype=np.float32)
-
-        avg_x = np.mean(polar_cluster[:, 0])
-        avg_y = np.mean(polar_cluster[:, 1])
-
-        # Fit a circle using minEnclosingCircle
-        #center, radius = cv2.minEnclosingCircle(polar_cluster)
-
-        avgs.append([avg_x,avg_y])
-
-    return avgs
-
-def fit_clusters_into_circles(clusters):
-
-    fitted_circles = []
-
-    for cluster in clusters:
-        if len(cluster) < 3:
-            # At least 3 points are needed to fit a circle
-            continue
-
-        # # Convert polar coordinates to numpy array
-        polar_cluster = np.array(cluster,dtype=np.float32)
-
-        # Fit a circle using minEnclosingCircle
-        center, radius = cv2.minEnclosingCircle(polar_cluster)
-
-        fitted_circles.append([center,radius])
-
-    return fitted_circles
-
-
-def polar_to_rectangular(Allclusters):
-    rectangular_clusters = []
-    
-    for cluster in Allclusters:
-        rectangular_points = []
-        
-        for point in cluster.reshape(-1,2):
-            range_val, angle_val = point[0], point[1]
-            x = range_val * np.cos(angle_val)
-            y = range_val * np.sin(angle_val)
-            rectangular_points.append([x, y])
-        
-        rectangular_clusters.append(rectangular_points)
-    
-    return rectangular_clusters
-
 def polartorect(randtheta):
+    # Convert polar coordinates (radius, angle) to rectangular coordinates (x, y)
     return [randtheta[0] * math.cos(randtheta[1]), randtheta[0] * math.sin(randtheta[1])]
 
-def polardistance(a, b):
-    return math.sqrt(a[0]**2 + b[0]**2 - 2 * a[0] * b[0] * math.cos(a[1] - b[1]))
-
-
-def visualization_point(center):
-
-    #Object as sphere
-    marker.header.frame_id = "map"
-    marker.header.stamp = rospy.Time.now()
-    marker.type = Marker.SPHERE
-    marker.action = Marker.ADD
-    marker.id = 1
-
-    marker.color.r = 0.5
-    marker.color.g = 1.0
-    marker.color.b = 1.0
-    marker.color.a = 1.0
-
-    marker.scale.x = 0.1
-    marker.scale.y = 0.1
-    marker.scale.z = 0.1
-
-    marker.pose.position.x=center[0]
-    marker.pose.position.y=center[1]
-    marker.pose.position.z=0
-
-    visualpub.publish(marker)
-
 def filter_infs(scan):
+    # Filter out infinite values from the scan data
+    # Replace infinite values with the maximum range
     return np.array([min(r, max_range) if not np.isinf(r) else max_range for r in scan])
  
 def kalmancallback(pose_array):
+
+    # Callback function to get position of already tracked people
     global kalmanpositionarray
     kalmanpositionarray = []
     for pose in pose_array.poses:
@@ -172,15 +105,16 @@ def kalmancallback(pose_array):
         kalmanpositionarray.append(kalmanpose)
 
 def callback(msg):
+    # time taken = 0.04s for callback to execute
     # Getting the polar coordinates of the point cloud
     global pose,first_time,t0,firstplottime,ax,fig,previous_scan,lidar_poses, kalmanpositionarray
-    
-    #entertime=time.time()
 
+    # Filter out infinite values from the scan data
     current_scan = filter_infs(np.array(msg.ranges))
 
     #Time handling
     if(first_time==True):
+        # If this is the first scan, store it as the previous scan
         previous_scan = current_scan
         t0=msg.header.stamp.to_nsec()*(10**(-9))
         rospy.loginfo("Background scan stored")
@@ -193,6 +127,7 @@ def callback(msg):
     before_clustering_time=rospy.Time.now()
     before_clustering_time_sec=before_clustering_time.to_nsec()*(10**(-9))
 
+    # Calculate the difference between the current scan and the previous scan
     difference = np.abs(current_scan - previous_scan)
 
     # Set a threshold for considering the difference as a significant change
@@ -202,15 +137,11 @@ def callback(msg):
     pts_r = current_scan[significant_indices]
     pts_ang = np.linspace(msg.angle_min, msg.angle_max, len(msg.ranges))[significant_indices]
 
-    # pts_r = np.array(msg.ranges)
-    # delfi = msg.angle_increment
-    # pts_ang = np.arange(start=msg.angle_min, stop=msg.angle_max, step=delfi)
-
-    # pts_r_list = list(pts_r)
-    # pts_ang_list = list(pts_ang)
-
     newscan_rect = []  #Contains point cloud in rectangular coordinates
     newscan_polar=[] #Contains point cloud in polar coordinates
+    # Filter out points that are too far away or infinite
+    # and convert polar coordinates to rectangular coordinates
+    # We are constraining the scan to a 1m radius circle
     for r, ang in zip(pts_r, pts_ang):
         if ((not np.isinf(r))) and (abs(r)<max_range):#Constraining scan to 1 radius circle 'and abs(r)<1'
             newscan_polar.append([r,ang])
@@ -223,9 +154,12 @@ def callback(msg):
 
     df = pd.DataFrame(newscan_rect, columns =['x', 'y'])
     try:
+        # Perform DBSCAN clustering
+        # eps is the maximum distance between two samples for one to be considered as in the neighborhood
+        # min_samples is the number of samples in a neighborhood for a point to be considered as a core point
+        # Here, eps is set to 0.03 meters and min_samples is set to 3
+        # You can adjust these parameters based on your specific use case
         clustering = DBSCAN(eps=0.03, min_samples=3).fit(df)
-
-    
 
         DBSCAN_dataset = df.copy()
 
@@ -249,41 +183,44 @@ def callback(msg):
         #Fit clusters into circles
         try:
             fitted_circles = fit_clusters_into_circles2(clusters) #It ll say some serialization error
-            #fitted_circles=avg_cluster(clusters) #remove later
         except:
             print("!!!!There is error in fitting circle!!!!")
 
         people=[]
         people_fitted_circles = []
-        print('This iteration:')
         for p in fitted_circles:
-            #print(p)
             center, radius = p
             near_tracked = False
             for kal_pos in kalmanpositionarray:
                 # If the fitted circle's center is within 0.5m of a tracked person
+                # Then the threshold for them to be considered as a person is increased
                 if np.linalg.norm(np.array(center) - np.array(kal_pos)) < near_tracking_range:
                     near_tracked = True
                     break
             if near_tracked:
+                # If the fitted circle's center is within 2m of a tracked person
+                # then the threshold for them to be considered as a person is increased to 10m of radius
                 if 0.01 < radius < near_tracking_range_radius:
                     people.append(center)
                     people_fitted_circles.append(p)
             else:
+                # In general, if the fitted circle's center is within 0.2m of radius
+                # then the threshold for them to be considered as a person is 0.2m
                 if 0.01 < radius < 0.2:
                     people.append(center)
                     people_fitted_circles.append(p)
-            #people.append(p)
+
+    
+        # Person detections are published as a PoseArray
+        # Each pose in the array corresponds to a detected person
+        # The position of the pose is set to the average of the cluster of the fitted circle
         lidar_poses=PoseArray()
 
-        #lidar_poses.header = Header(stamp=rospy.Time.now(), frame_id="base_frame") #Modified to make it work with approximate time sync
         lidar_poses.header = Header(stamp=ptime_stamp, frame_id="lidar")
 
-        
         for k in people:
             lidar_pose=Pose()
-            #lidar_pose.header = Header(stamp=rospy.Time.now(), frame_id="base_frame")
-            lidar_pose.position.x,lidar_pose.position.y=k#list(k[0])
+            lidar_pose.position.x,lidar_pose.position.y=k
 
             lidar_poses.poses.append(lidar_pose)
 
@@ -356,11 +293,6 @@ def callback(msg):
     after_clustering_time_sec=after_clustering_time.to_nsec()*(10**(-9))
     time_elapse=after_clustering_time_sec-before_clustering_time_sec
     
-    #exittime=time.time()
-    
-    #print('time taken:',exittime-entertime)
-    # time taken = 0.04s
-
     previous_scan = current_scan
     
     pose_lidar_pub.publish(lidar_poses)

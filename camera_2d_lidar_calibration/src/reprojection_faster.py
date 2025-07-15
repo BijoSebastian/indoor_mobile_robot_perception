@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# Required imports
 import rospy
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
@@ -33,6 +34,7 @@ def ensure_2d_array(arr):
 
 #HUNGARIAN ALGORITHM
 def cost_matrix(poses1,poses2):
+    # Function to compute the cost matrix between two sets of poses.
 
     poses1=ensure_2d_array(poses1)
     poses2=ensure_2d_array(poses2)
@@ -55,6 +57,8 @@ def cost_matrix(poses1,poses2):
 
 #Functions for object detecion
 def Object_detection_yolo(img):
+    # Function to perform object detection using YOLO on the given image.
+    # It returns a PoseArray of detected objects and their positions.
 
     cam_detections=[]
     height= img.shape[0]
@@ -157,17 +161,14 @@ def Object_detection_yolo(img):
 
                 posearray.poses.append(pose)
                 cam_detections.append([center_x,center_y])
-            
-    # for i in range(len(posearray.poses)):
-    #     try:
-    #         cv2.circle(img, (int(round(posearray.poses[i].position.x)),int(round(posearray.poses[i].position.y))), detection_point_radius, (255,0,0), -1)
-    #     except :
-    #         continue
 
     return posearray,cam_detections
 
 #Function for reprojection
 def get_z(T_cam_world, T_world_pc, K):
+    # Function to compute the z-coordinate of the projected points in the camera frame.
+    # T_cam_world is the transformation matrix from camera to world frame,
+    # T_world_pc is the point cloud in world coordinates, and K is the camera intrinsic
     R = T_cam_world[:3,:3]
     t = T_cam_world[:3,3]
     proj_mat = np.dot(K, np.hstack((R, t[:,np.newaxis])))
@@ -181,38 +182,21 @@ def get_z(T_cam_world, T_world_pc, K):
     return z
 
 def extract(point):
+    # Extracts the x, y, z coordinates from a PointCloud2 point.
+    # Returns a list of coordinates.
     return [point[0], point[1], point[2]]
 
 def extract_PoseArray(point):
+    # Extracts the x, y coordinates from a PoseArray point.
+    # Returns a list of coordinates.
     x=[point.position.x,point.position.y,0]
     return x
-#Callback functions
-# def scan_callback(scan):
-#     global img_points
-
-#     #Scan part
-#     #The scan is projected on the image as green circles
-#     cloud = lp.projectLaser(scan)
-#     points = pc2.read_points(cloud)
-#     objPoints = np.array([extract(point) for point in points])
-    
-#     Z = get_z(q, objPoints, K)
-    
-#     objPoints = objPoints[Z > 0]
-    
-#     if lens == 'pinhole':
-#         img_points, _ = cv2.projectPoints(objPoints, rvec, tvec, K, D)
-        
-#     elif lens == 'fisheye':
-#         objPoints = np.reshape(objPoints, (1,objPoints.shape[0],objPoints.shape[1]))
-#         img_points, _ = cv2.fisheye.projectPoints(objPoints, rvec, tvec, K, D)
-        
-    
-#     img_points = np.squeeze(img_points)
-
     
 
 def image_callback(image):
+    # Callback function to handle incoming images.
+    # It converts the ROS Image message to a NumPy array and processes it for object detection
+
     
     global img, cam_detections, camposearray
 
@@ -231,6 +215,9 @@ def image_callback(image):
     camposearray.header.stamp=image.header.stamp #Camera Detections have same timestamp as the image itself
 
 def detection_callback(lidar_detections):
+    # Callback function to handle incoming LiDAR detections.
+    # It projects the LiDAR detections onto the camera image and associates them with camera detections 
+    # Time required to execute this callback is 0.0015
     global entertime,exittime, img, cam_detections, camposearray
     print('Callback started!')
 
@@ -290,6 +277,8 @@ def detection_callback(lidar_detections):
             
             detected_points = np.round(np.squeeze(detected_points))
             detected_points=detected_points.astype(int)
+
+            # <----------- Uncomment this for plotting LIDAR DETECTION in the image ------------------->
             # for i in range(len(detected_points)):
             #         if not np.isscalar(detected_points[i]):  # Check if not a scalar
             #             if len(detected_points[i]) == 2:
@@ -298,6 +287,7 @@ def detection_callback(lidar_detections):
             #                 print(f"!!!!Error: detected_points[{i}] is not a valid 2D tuple. Skipping circle.!!!!")
             #         else:
             #             print(f"!!!!Error: detected_points[{i}] is a scalar after projection. Skipping circle.!!!!")
+            # <------------------------------------ END ----------------------------------------------->
 
 
                     
@@ -317,22 +307,17 @@ def detection_callback(lidar_detections):
             
             for row, col in assignment:
                 dist = np.linalg.norm(np.array(detected_points[row]) - np.array(cam_detections[col]))
-                #print('Distance:!!!!!!!!!!!!!!:',dist)
-                # print('row, col:',row, col)
-                # print('obj_detected_Points:',obj_detected_Points)
-                # print(f"Pose {obj_detected_Points[0][row]} in poses1, assigned to poses {cam_detections[col]} in Poses2")
-                # print('detected_points:',detected_points)
-                # print('detected_point:',detected_points[row])
-                # print('cam_detections:',cam_detections[col])
-                # print('Type:',type(detected_points[row]))
                 if dist > MAX_ASSOCIATION_DIST:
                     print(dist)
                     print(f"Skipping association between {detected_points[row]} and {cam_detections[col]} due to large distance: {dist}")
                     continue
+
+                # <----------- Uncomment this for plotting association in the image ------------------->
                 # if isinstance(detected_points[row], (list, np.ndarray)):
                 #     cv2.line(img, detected_points[row], cam_detections[col], (255, 255, 0) , 5) 
                 # else:
                 #     cv2.line(img, detected_points, cam_detections[col], (255, 255, 0) , 5)
+                # <----------------------------------END----------------------------------------------->
 
                 paired_pose=[obj_detected_Points[0][row],cam_detections[col]] #[Laser detections, camera detections]
                 paired_pose_array.append(paired_pose)
@@ -352,14 +337,9 @@ def detection_callback(lidar_detections):
     exittime=time.time()
     print('Time elapsed:',exittime-entertime)
 
-    #Time elapse is 0.0015
-
-    
     
     if len(filtered_pose_array.poses):
         filtered_laser_pub.publish(filtered_pose_array)
-    #pub.publish(bridge.cv2_to_imgmsg(img))
-    #detection_pub.publish(camposearray)
 
 #Global variables
  
@@ -389,6 +369,7 @@ cfg_path = os.path.join(pkg_path, 'src', 'yolov4-tiny.cfg')
 weights_path = os.path.join(pkg_path, 'src', 'yolov4-tiny.weights')
 coco_path = os.path.join(pkg_path, 'src', 'coco.names')
 
+# Load YOLO model
 net = cv2.dnn.readNet(cfg_path, weights_path)
 
 #net = cv2.dnn.readNet("/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.cfg","/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.weights")
@@ -397,6 +378,9 @@ net = cv2.dnn.readNet(cfg_path, weights_path)
 
 classes = []
 
+# Read the class names from the coco.names file
+# This file should contain the names of the classes in YOLO format.
+# Each class name should be on a new line.
 with open(coco_path, "r") as f:
 
     classes = [line.strip() for line in f.readlines()]
@@ -412,6 +396,9 @@ output_layers = [layer_names[i- 1] for i in net.getUnconnectedOutLayers()]
 print("YOLO LOADED")
 
 
+# Load calibration parameters
+# Read the calibration file and extract the extrinsic parameters (rotation and translation)
+# Read the camera parameters from the config file
 with open(calib_file, 'r') as f:
     data = f.read().split()
     qx = float(data[0])

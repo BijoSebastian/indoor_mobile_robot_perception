@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# Libraries to import
 import rospy
 from sensor_msgs.msg import LaserScan
 import math
@@ -22,6 +23,8 @@ from geometry_msgs.msg import TransformStamped
 #Functions
 
 def cost_matrix(poses1,poses2):
+
+    # Calculates the cost matrix between two sets of poses.
 
     cost_mat=np.empty([len(poses1),len(poses2)])
     row=0
@@ -98,6 +101,8 @@ def transform_frame1_to_frame2(person_frame1, frame1_orientation, frame1_transla
 class kalman_models:
 
     def __init__(self,object_type,list_of_objects):
+        # Write EKF model for each object type, eventually
+        # object_type can be 'person', 'car', etc.
         self.object_type=object_type
         self.list_of_objects=list_of_objects
 
@@ -108,15 +113,10 @@ class person:
     #H matrix for states to measurement space
     H=np.array([[1,0,0,0,0],
             [0,1,0,0,0]])
-    #R matrix for noise associated with measurement
-    #Originally
-    # R=np.array([[0.1,0,0],
-    #         [0,0.1,0],
-    #         [0,0,50]])
     
-    # R=np.array([[0.1*(10**4),0],
-    #         [0,0.1*(10**4)]])
-    
+    # Measurement noise covariance matrix
+    # This is a diagonal matrix with large values for the noise in x and y measurements
+    # Adjust these values based on the expected noise in your measurements
     R=np.array([[10000,0],
             [0,10000]])
     
@@ -126,14 +126,14 @@ class person:
     last_id=1
 
     def __init__(self,Xc,Xp,P,rev,id,iterations,ptime):
-        self.Xc=Xc
-        self.Xp=Xp
-        self.P=P
-        self.rev=rev
-        self.id=id
-        self.iterations=iterations
-        self.ptime=ptime
-        self.ctime=ptime
+        self.Xc=Xc # Current state (x,y,theta,v,w)
+        self.Xp=Xp # Previous state (x,y,theta,v,w)
+        self.P=P # Covariance matrix
+        self.rev=rev #Counts the number of revolutions. (Rudimentry)
+        self.id=id # Unique ID for the person
+        self.iterations=iterations # Counts the number of iterations without measurement update
+        self.ptime=ptime # Previous time 
+        self.ctime=ptime # Current time 
 
     #Functions pertaining to the model of a person
 
@@ -147,9 +147,11 @@ class person:
         wp=self.Xc[4][0]
         
         if abs(wp) > 1e-5 :
+            # When wp is not zero, use the circular motion equations
             xn = xp + ((vp/wp) * (math.sin(thetap + wp * delt) - math.sin(thetap)))
             yn = yp + ((vp/wp) * (-math.cos(thetap + wp * delt) + math.cos(thetap)))
         else :
+            # When wp is zero, use the linear motion equations
             xn=xp+((vp)*math.cos(thetap)*delt)
             yn=yp+((vp)*math.sin(thetap)*delt)
         
@@ -165,12 +167,11 @@ class person:
         
         x_prev=self.Xc
 
-        
-
         return x_pred,x_prev
     
     def compute_G(self,delt):
 
+        # This function computes the Jacobian matrix G of the state transition function g
         x=self.Xc[0][0]
         y=self.Xc[1][0]
         theta=self.Xc[2][0]
@@ -247,13 +248,13 @@ class person:
 
     def prediction(self,delt):
     
-        #delt=self.ctime-self.ptime
+        # This function performs the prediction step of the Kalman filter.
+
         x_pred,x_prev=self.g(delt)
         G=self.compute_G(delt)
-        Q = np.diag([0.1, 0.1, 0.1, 0.1, 0.1]) # You can tune this
-        p_pred = (G @ self.P @ G.T) + Q
-        #p_pred=np.matmul(np.matmul(G,self.P),(G.transpose()))
+        Q = np.diag([0.05, 0.05, 100, 0.1, 300]) # Process noise covariance matrix (Tunable parameters)
 
+        p_pred = (G @ self.P @ G.T) + Q
 
         self.Xc=x_pred
         self.Xp=x_prev
@@ -267,11 +268,12 @@ class person:
         return x_meas
 
     def measurement_update(self,meas):
+
+        # This function performs the measurement update step of the Kalman filter.
     
         meas_new=np.array([[meas[0]],
                      [meas[1]]])
         y=np.array(meas_new)-person.hfxn(self.Xc) #Convert to measurement domain - (x,y)
-        print('y:',y)
         s=np.matmul(np.matmul(person.H,self.P),((person.H).transpose()))+person.R
         k=np.matmul(np.matmul(self.P,(person.H.transpose())),(np.linalg.inv(s)))
         self.Xc=self.Xc+np.matmul(k,y)
@@ -286,6 +288,8 @@ def pose_callback(robot_pose):
     #Here using the robot pose, the kalman pose needs to transformed to global frame.
     #publish it to /globalkalmanposearray topic using PoseIDArray msg
 
+    #This function keeps publishing the transform from the robot frame to the base frame
+    # This transform is needed to convert the local coordinates of the people to global coordinates
     global robot_position
 
 
@@ -300,8 +304,8 @@ def pose_callback(robot_pose):
     t.header.stamp = robot_pose.header.stamp
     t.header.frame_id = "map"
     t.child_frame_id = "base_frame"
-    t.transform.translation.x = x
-    t.transform.translation.y = y
+    t.transform.translation.x = x/1000
+    t.transform.translation.y = y/1000
     t.transform.translation.z = 0
     quat = tf.transformations.quaternion_from_euler(0,0,yaw)
     t.transform.rotation.x = quat[0]
@@ -312,10 +316,10 @@ def pose_callback(robot_pose):
     tf_br.sendTransform(t)
 
 
-
-
-
 def callback(filtered_pose_array):
+
+    # This function is called when a new filtered pose array is received.
+    # It performs association, convert the measurements to global frame and then performs the Kalman filter update and publishes the results.
     
     global kalmanpredpose_array,predicted_list, robot_position
     
@@ -343,6 +347,8 @@ def callback(filtered_pose_array):
     for i in filtered_pose_array.poses:
         filtered_xy_list.append([i.position.x,i.position.y])
 
+    # Association part
+    # We will use the Hungarian algorithm to find the optimal assignment between filtered poses and predicted poses
     cost=cost_matrix(filtered_xy_list,predicted_xy_list)
 
     #Solve the assignment problem
@@ -352,17 +358,11 @@ def callback(filtered_pose_array):
     assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
 
     for row, col in assignment:
-        # dist = np.linalg.norm(np.array(filtered_xy_list[row]) - np.array(predicted_xy_list[col]))
-
-        #print(f"Pose {filtered_xy_list[row]} in poses1, assigned to poses {predicted_xy_list[col]} in Poses2")
-        
-        # if dist > MAX_ASSOCIATION_DIST:
-        #     print(f"Skipping association between {filtered_xy_list[row]} and {predicted_xy_list[col]} due to large distance: {dist}")
-        #     continue
-        #if(np.linalg.norm(np.array(filtered_xy_list[row])-np.array(predicted_xy_list[col]))<=0.7):
 
         selected_xy_list.append(filtered_xy_list[row])
 
+        # Now the new measurements have IDs assigned to them
+        # The IDs are taken from the predicted poses
         ided_pose = []
         ided_pose.append(filtered_xy_list[row][0])
         ided_pose.append(filtered_xy_list[row][1])
@@ -381,16 +381,18 @@ def callback(filtered_pose_array):
         
 
     for k in selected_xy_list:
+        # Remove the selected poses from the filtered list
         if(k in filtered_xy_list):
             filtered_xy_list.remove(k)
             #print("Got removed:",k)
 
     for j in filtered_xy_list:
+        # If there are any filtered poses that were not assigned to any predicted pose, we assign them a new ID of 0
+        # This is the case when a new person is detected
         ided_pose = []
         ided_pose.append(j[0])
         ided_pose.append(j[1])
         ided_pose.append(0)
-        #print('Going to be created:',(j[0],j[1],0))
 
         ided_posemsg=PoseID()
         ided_posemsg.pose.position.x=j[0]
@@ -419,6 +421,8 @@ def callback(filtered_pose_array):
 
     for i in pose_list:
 
+        # Convert the measurements to global frame using the robot position
+
         meas_x = i[1]
         meas_y = i[2]
 
@@ -434,6 +438,8 @@ def callback(filtered_pose_array):
 
                     measglobalpose = tf2_geometry_msgs.do_transform_pose(measposestamp,tf_msg)
 
+                    print('Measpose:',measglobalpose)
+
                     measglobalpose_list = [i[0],measglobalpose.pose.position.x,measglobalpose.pose.position.y,p_time_sec]
 
                     measglobalposearray.append(measglobalpose_list)
@@ -444,24 +450,24 @@ def callback(filtered_pose_array):
 
     pose_list = measglobalposearray
 
-
     for i in pose_list:
         meas=i[1:4]
         for j in people:
             if(i[0]==j.id):
-                #plt.scatter(i[1],i[2],color='red')
+                # This is the case when a person is already detected
                 print("UPDATING POSE OF ",j.id)
                 print('Meas:',meas)
                 #meas_new=(j).heading_angle(meas)
                 present_position=np.array([meas[0],meas[1]])
                 prev_position=np.array([j.Xc[0][0],j.Xc[1][0]])
                 (j).measurement_update(meas)
-                j.ptime = present_time
+                #j.ptime = present_time
                 print(f'Position of person {j.id} is {[j.Xc[0][0],j.Xc[1][0]]}')
                 print(f'Heading of person {j.id} is {j.Xc[2][0]}')
                 print(f'Velocity of person {j.id} is {[j.Xc[3][0],j.Xc[4][0]]}')
                 
         if(i[0]==0):
+            # This is the case when a new person is detected
             print("NEW CREATED")
             Xc_new=np.array([[meas[0]],
                             [meas[1]],
@@ -486,11 +492,12 @@ def callback(filtered_pose_array):
             id_new=person.last_id+1
             person.last_id+=1
             iterations_new=0
-            ptime = present_time
+            ptime = p_time_sec
             print('New ID:',id_new)
             people.append(person(Xc_new,Xp_new,P_new,rev_new,id_new,iterations_new,ptime))
 
     #Deletion part
+    # We will delete the people who have not been updated for more than 10 iterations
     index=0                                  
     for k in people:
         
@@ -504,9 +511,10 @@ def callback(filtered_pose_array):
         index+=1
 
     #Making kalman pose array for publishing
+    # Publishing the current state of each person in the kalmanpose_array
     for i in people:
         kalmanpose=PoseID()
-        kalmanpose.header.stamp=i.ptime
+        kalmanpose.header.stamp=rospy.Time.from_sec(i.ptime)
         kalmanpose.ID=i.id
         kalmanpose.pose.position.x=i.Xc[0][0]
         kalmanpose.pose.position.y=i.Xc[1][0]
@@ -516,6 +524,9 @@ def callback(filtered_pose_array):
         kalmanpose_array.poses.append(kalmanpose)
 
     #Time to do prediction
+    # Get the current time in seconds
+    # This is used to calculate the time elapsed since the last measurement update
+
 
     current_time=filtered_pose_array.header.stamp
     current_time=current_time.to_nsec()*(10**(-9)) #Time in seconds
@@ -528,14 +539,15 @@ def callback(filtered_pose_array):
 
     if people:
         for i in people:
+            # For each person tracked, we will perform the prediction step of the Kalman filter
+            # We will also publish the predicted pose in the kalmanpredpose_array
             print("PREDICTING...")
-            time_elapsed=current_time-((i.ptime).to_nsec()*(10**(-9))) #Time in seconds
+            time_elapsed=current_time-i.ptime #Time in seconds
             i.prediction(time_elapsed)
             predpose = PoseID()
             predpose.ID = i.id
             predpose.pose.position.x = i.Xc[0][0]
             predpose.pose.position.y = i.Xc[1][0]
-            #print(f'Position of person {i.id} is {[i.Xc[0][0],i.Xc[1][0]]}')
             print(f'Position of person {i.id} is {[i.Xc[0][0],i.Xc[1][0]]}')
             print(f'Heading of person {i.id} is {i.Xc[2][0]}')
             print(f'Velocity of person {i.id} is {[i.Xc[3][0],i.Xc[4][0]]}')
@@ -545,123 +557,38 @@ def callback(filtered_pose_array):
         if people:
             i=people[0]
             duration=time_elapsed
+            # This is used to calculate the time elapsed since the last measurement update
+            # We will use this to update the header stamp of the kalmanpredpose_array
             increment = rospy.Duration(duration)
             new_time = filtered_pose_array.header.stamp + increment
             kalmanpredpose_array.header= Header(stamp=new_time,frame_id='base_frame')
 
-            #Converting kalmanposearray to global coordinates
-
-            robot_x = robot_position.pose.pose.position.x
-            robot_y = robot_position.pose.pose.position.y
-
-            #print('robot_x:',robot_x)
-
-            q=robot_position.pose.pose.orientation
-            siny_cosp = 2 * (q.w * q.z + q.x * q.y)
-            cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
-            #robot_yaw = -(math.atan2(siny_cosp, cosy_cosp)-(math.pi/2))
-            robot_yaw = (math.atan2(siny_cosp, cosy_cosp))
-
             globalposearray = PoseIDArray()
             globalposearray.header= Header(stamp=filtered_pose_array.header.stamp,frame_id='map')
 
-            # intermediateposearray = PoseArray()
-            # intermediateposearray.header= Header(stamp=new_time,frame_id='usb_cam')
-
             for human in people:
-
-                # local_pose = PoseStamped()
-                # local_pose.header.frame_id = "base_frame"
-                # local_pose.header.stamp = rospy.Time.now()
-                # local_pose.pose.position.x = human.Xc[0][0]*1000
-                # local_pose.pose.position.y = human.Xc[1][0]*1000
-                # local_pose.pose.position.z = 0
-                # local_pose.pose.orientation.z = math.sin(human.Xc[2][0] / 2.0)
-                # local_pose.pose.orientation.w = math.cos(human.Xc[2][0] / 2.0)
-                
-                # try:
-                #     transform = tf_buffer.lookup_transform("map", "base_frame", rospy.Time(0), rospy.Duration(1.0))
-                #     global_pose = tf2_geometry_msgs.do_transform_pose(local_pose, transform)
-
-                #     transformed_pose = PoseID()
-                #     transformed_pose.ID = human.id
-                #     transformed_pose.pose = global_pose.pose
-                #     transformed_pose.pose.position.z = human.Xc[3][0]  # Linear velocity
-                #     transformed_pose.pose.orientation.x = human.Xc[4][0]  # Angular velocity
-
-                #     globalposearray.poses.append(transformed_pose)
-                # except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
-                #     rospy.logwarn("TF2 Transform failed for human ID: {}".format(human.id))
-
-                
-
-                local_x=human.Xc[0][0]*1000
-                local_y=human.Xc[1][0]*1000
+                # Publishing the global pose of each person in the globalposearray in mm
                 local_yaw=human.Xc[2][0]
-
-                # lidarlocalpose = [local_x,local_y,0]
-                # # Peforming transform from Lidar to robot frame (USBCAM frame)
-                # #local_x,local_y,local_z= transform_frame1_to_frame2(lidarlocalpose,[np.pi/2,np.pi/2,0],[0,0,0])
-
-                # localpose = PoseStamped()
-                # localpose.header.stamp = human.ptime
-                # localpose.header.frame_id = "lidar"
-                # #localpose.header= Header(stamp=rospy.Time.now(),frame_id='usb_cam')
-                # localpose.pose.position.x = local_x
-                # localpose.pose.position.y = local_y
-                # localpose.pose.position.z = 0
-
-                # # orientation for the person’s heading:
-                # localpose.pose.orientation.z = math.sin(human.Xc[2][0] / 2.0)
-                # localpose.pose.orientation.w = math.cos(human.Xc[2][0] / 2.0)
-
-                #local_y = local_y
-                # temp = local_y
-                # local_y = local_x
-                # local_x = temp
-
-                # Transform to global frame
-                #global_x = (robot_x + (local_x * math.cos(robot_yaw)) - (local_y * math.sin(robot_yaw)))
-                #global_y = (robot_y + (local_x * math.sin(robot_yaw)) + (local_y * math.cos(robot_yaw)))
-
-                # if abs(robot_yaw - prev_robot_yaw) >= 0.25 :
-                #     robot_yaw = prev_robot_yaw
-
                 try:
-                    # tf_msg = tf_buffer.lookup_transform("map","lidar",localpose.header.stamp,rospy.Duration(0.2))
-
-                    # globalpose = tf2_geometry_msgs.do_transform_pose(localpose,tf_msg)
-
-
-                    #Transform to global coordinates
-
                     globalposeid = PoseID()
                     globalposeid.ID = human.id
                     globalposeid.pose.position.x = human.Xc[0][0]*1000
                     globalposeid.pose.position.y = human.Xc[1][0]*1000
-                    #_,_,yaw= tf.transformations.euler_from_quaternion([0,0,globalpose.pose.orientation.z,globalpose.pose.orientation.w])
                     yaw = local_yaw
                     globalposeid.pose.orientation.z = yaw
                     globalposeid.pose.position.z= human.Xc[3][0] # I m using z position to store linear velocity
                     globalposeid.pose.orientation.x=human.Xc[4][0] # I m using z position to store angular velocity
-                    #print('v:',human.Xc[3][0])
 
                     globalposearray.poses.append(globalposeid)
-                    #intermediateposearray.poses.append(localpose)
 
                 except (tf2_ros.LookupException, tf2_ros.ConnectivityException,tf2_ros.ExtrapolationException) as e:
                     rospy.logwarn("TF lookup failed: %s", e)
 
-        #intermediate_kalman_pose_pub.publish(intermediateposearray)
         kalman_predicted_pose_pub.publish(kalmanpredpose_array)
         global_kalman_pose_pub.publish(globalposearray)
         kalman_pose_pub.publish(kalmanpose_array)
         measurepub.publish(ided_posemsg_array)
 
-    #prev_robot_yaw = robot_yaw
-    
-    
-    #kalman_predicted_pose_pub.publish(kalmanpredpose_array)
 
 def main():
     global kalman_pose_pub,kalman_predicted_pose_pub,people, predicted_list, measurepub, robot_position,global_kalman_pose_pub,intermediate_kalman_pose_pub
@@ -669,31 +596,29 @@ def main():
 
     #Initial Condition    
 
-    people=[]
-    predicted_list =[]
-    robot_position = PoseWithCovarianceStamped()
+    people=[] # List to hold all the people objects
+    predicted_list =[] # List to hold the predicted poses of people
+    robot_position = PoseWithCovarianceStamped() # To hold the robot pose
     
     rospy.init_node('Kalman_filter')
 
-    measurement_sub = rospy.Subscriber('/PoseFilteredLaser', PoseArray, callback,queue_size=1)
+    measurement_sub = rospy.Subscriber('/PoseFilteredLaser', PoseArray, callback,queue_size=1) # This is the topic where the filtered poses are published
 
-    robot_pose_sub = rospy.Subscriber('/pose_ekf', PoseWithCovarianceStamped, pose_callback,queue_size=1)
+    robot_pose_sub = rospy.Subscriber('/pose_ekf', PoseWithCovarianceStamped, pose_callback,queue_size=1) # This is the topic where the robot pose is published
 
-    kalman_pose_pub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=1)
+    kalman_pose_pub=rospy.Publisher('/kalmanposeArray',PoseIDArray,queue_size=1) # This is the topic where the kalman poses are published
 
-    global_kalman_pose_pub=rospy.Publisher('/globalkalmanposeArray',PoseIDArray,queue_size=1)
+    global_kalman_pose_pub=rospy.Publisher('/globalkalmanposeArray',PoseIDArray,queue_size=1) # This is the topic where the global kalman poses are published
 
-    # intermediate_kalman_pose_pub=rospy.Publisher('/intermediatekalmanpose',PoseArray,queue_size=1)
-
-    kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=1)
+    kalman_predicted_pose_pub=rospy.Publisher('/PredictedPoses',PoseIDArray,queue_size=1) # This is the topic where the predicted poses are published
     
-    measurepub=rospy.Publisher('/Measurements',PoseIDArray,queue_size=1)
+    measurepub=rospy.Publisher('/Measurements',PoseIDArray,queue_size=1) 
 
-    # tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(20.0))  # <-- Buffer duration in seconds
-    # tf_istener = tf2_ros.TransformListener(tf_buffer)
     tf_buffer = tf2_ros.Buffer()
     tf_listener = tf2_ros.TransformListener(tf_buffer)
     tf_br = tf2_ros.TransformBroadcaster()
+
+    # Static transform broadcaster to publish the transform from the base frame to the lidar frame
 
     static_br = tf2_ros.StaticTransformBroadcaster()
     rospy.sleep(0.1)

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+# Required imports
 import rospy
 import numpy as np
 import matplotlib
@@ -8,7 +10,6 @@ import threading
 import math
 import signal
 import sys
-
 from tracking.msg import PoseID, PoseIDArray
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -21,18 +22,25 @@ from threading import Lock
 traj_lock = Lock()
 
 def pose_to_position(pose):
+    # Convert a PoseID message to a tuple of (x, y, timestamp).
     return (pose.pose.position.x, pose.pose.position.y, pose.header.stamp.to_sec())
 
 def pose_to_position_with_heading(pose):
+    # Convert a PoseID message to a tuple of (x, y, heading, timestamp).
     return (pose.pose.position.x, pose.pose.position.y,pose.pose.orientation.z,pose.header.stamp.to_sec())
 
 
 def update_trajectory(traj_dict, person_id, position):
+    # Update the trajectory for a given person ID with the new position.
+    # If the person ID does not exist in the dictionary, create a new entry.
+    # Each entry is a list of tuples (x, y, timestamp) or (x, y, heading, timestamp).
     if person_id not in traj_dict:
         traj_dict[person_id] = []
     traj_dict[person_id].append(position)
 
 def measured_callback(msg):
+    # Callback function to handle incoming measurements.
+    # It updates the measured trajectories with the new positions.
     print('Receiving measurements!')
     with traj_lock:
         for pose in msg.poses:
@@ -40,6 +48,9 @@ def measured_callback(msg):
             update_trajectory(measured_trajectories, pose.ID, position)
 
 def kalman_callback(msg):
+    # Callback function to handle incoming Kalman filter messages.
+    # It updates the Kalman trajectories with the new positions.
+    # Each position includes the heading (orientation.z) and timestamp.
     print('Receiving kalman messages!')
     with traj_lock:
         for pose in msg.poses:
@@ -47,6 +58,8 @@ def kalman_callback(msg):
             update_trajectory(kalman_trajectories, pose.ID, position)
 
 def plot_trajectories():
+    # Function to plot the trajectories of measured and Kalman-filtered positions.
+    # It runs in a separate thread to continuously update the plot.
     plt.ion()
     fig, ax = plt.subplots()
 
@@ -84,7 +97,7 @@ def plot_trajectories():
                         for x, y, heading,_ in arrow_data :
                             dx = 0.3 * math.cos (heading)
                             dy = 0.3 * math.sin (heading)
-                            ax.arrow(x, y, dx, dy, head_width = 0.01*4000, head_length = 0.005*2000, fc=color, ec=color)
+                            ax.arrow(x, y, dx, dy, head_width = 0.01*40, head_length = 0.005*20, fc=color, ec=color)
 
 
         ax.legend(loc='best')

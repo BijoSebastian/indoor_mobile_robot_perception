@@ -1,9 +1,9 @@
 <launch>
   <node pkg="tracking" type="dbscan.py" name="dbscan" /> 
-  <node name="ekf" pkg="tracking" type="ekf_transform.py" output="screen" />
+  <node name="ekf" pkg="tracking" type="ekf_transform.py" />
   <!-- <node name="hungarian" pkg="tracking" type="hungarian_node.py" output="screen"/> -->
   <!-- <node name="Visualization" pkg="tracking" type="vis_multiple.py" output="screen"  /> -->
-  <node name="Visualization" pkg="tracking" type="ekfvis.py" output = "screen" />
+  <node name="Visualization" pkg="tracking" type="ekfvis.py" output="screen" />
   <!--
   <node pkg="rviz" type="rviz" name="Rviz" /> 
   -->
