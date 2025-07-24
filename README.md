@@ -7,61 +7,59 @@ This guide outlines the steps required to run the perception stack using ROS. Fo
 - Cloned this repository
 - Necessary `.bag` files available(For simulation)
 
-## Usage(For simulation)
-### Step 1: Initialize ROS Core
+## Usage
+### Step 1: Launch your robot and sensors
 Open **Terminal 1** and run:
 
 ```bash
-cd catkin_ws
-source devel_isolated/apriltag_ros/setup.bash
-roscore
+roslaunch rplidar_ros rplidar_a1.launch
 ```
 
-### Step 2: Start Image Processing Node
 Open **Terminal 2** and run:
 
 ```bash
-cd catkin_ws
-source devel_isolated/apriltag_ros/setup.bash
-rosparam set use_sim_time true
-ROS_NAMESPACE=usb_cam rosrun image_proc image_proc
+roslaunch usb_cam usb_cam-test.launch
 ```
 
-### Step 3: Launch AprilTag Ground Truth
+Also, launch required nodes to get position of robot topic (in case your using Indoor mobile robot - /pose_ekf)
+
+### Step 2: Start Image Processing Node
 Open **Terminal 3** and run:
 
 ```bash
-cd catkin_ws
-source devel_isolated/apriltag_ros/setup.bash
-roslaunch apriltag_ros ground_truth.launch
+ROS_NAMESPACE=usb_cam rosrun image_proc image_proc
 ```
 
-### Step 4: Start Camera-LiDAR Projection
+
+
+### Step 3: Start Camera-LiDAR Projection
 Open **Terminal 4** and run:
 
 ```bash
-cd catkin_ws
-source devel_isolated/apriltag_ros/setup.bash
-roslaunch camera_2d_lidar_calibration reprojection.launch
+roslaunch camera_2d_lidar_calibration reprojection_real.launch
 ```
 
-### Step 5: Start Tracking 
+### Step 4: Start Tracking 
 Open **Terminal 5** and run:
 
 ```bash
-cd catkin_ws
-source devel_isolated/apriltag_ros/setup.bash
-roslaunch tracking tracking.launch
+roslaunch tracking tracking_real.launch
 ```
 
-### Step 6: Play the Required Bag File
+### Step (For simulation) : Play the Required Bag File (Instead of step 1)
+Open **Terminal 1** and run:
+
+```bash
+cd <Bagfile location>
+rosbag play <required_bagfile>
+```
+
+### Step (For Ground truth) : Launch AprilTag Ground Truth ( OPTIONAL )
 Open **Terminal 6** and run:
 
 ```bash
 cd catkin_ws
-source devel_isolated/apriltag_ros/setup.bash
-cd <Bagfile location>
-rosbag play <required_bagfile>
+roslaunch apriltag_ros ground_truth.launch
 ```
 
 > **Note:** Replace `<Bagfile location>` with path of the bagfile directory and `<required_bagfile>` with your desired bag file name.
