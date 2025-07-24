@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+
+# Required imports
+import rospy
+import cv2
+from cv_bridge import CvBridge, CvBridgeError
+from pyquaternion import Quaternion
+import yaml
+import numpy as np
+from sensor_msgs.msg import Image, LaserScan, PointCloud2
+from geometry_msgs.msg import PoseArray,Pose
+import laser_geometry.laser_geometry as lg
+import sensor_msgs.point_cloud2 as pc2
+from scipy.optimize import linear_sum_assignment
+from std_msgs.msg import Header
+import time
+import os
+import rospkg
+
+#Global Variables
+MAX_ASSOCIATION_DIST = 150
+
+def ensure_2d_array(arr):
+  """Converts an array to a 2D NumPy array.
+
+  Args:
+      arr: The input array.
+
+  Returns:
+      A 2D NumPy array, even if the input was a 1D array.
+  """
+  return np.atleast_2d(arr)
+
+
+#HUNGARIAN ALGORITHM
+def cost_matrix(poses1,poses2):
+    # Function to compute the cost matrix between two sets of poses.
+
+    poses1=ensure_2d_array(poses1)
+    poses2=ensure_2d_array(poses2)
+
+    cost_mat=np.empty([len(poses1),len(poses2)])
+    row=0
+    col=0
+    poses1=np.array(poses1)
+    poses2=np.array(poses2)
+    
+    for i in poses1:
+        for j in poses2:
+            dist=np.linalg.norm((i-j))
+            cost_mat[row,col]=dist
+            col+=1
+        col=0
+        row+=1
+    
+    return cost_mat
+
+#Functions for object detecion
+def Object_detection_yolo(img):
+    # Function to perform object detection using YOLO on the given image.
+    # It returns a PoseArray of detected objects and their positions.
+
+    cam_detections=[]
+    height= img.shape[0]
+
+    width= img.shape[1]
+
+    blob = cv2.dnn.blobFromImage(img, 1 / 255.0, (416, 416),
+
+    swapRB=True, crop=False)
+
+    #Detecting objects
+
+    net.setInput(blob)
+
+    outs = net.forward(output_layers)
+
+    # Showing informations on the screen
+
+    class_ids = []
+
+    confidences = []
+
+    boxes = []
+
+    for out in outs:
+
+        for detection in out:
+
+            scores = detection[5:]
+
+            class_id = np.argmax(scores)
+
+            confidence = scores[class_id]
+
+            if confidence > 0.5:
+
+                # Object detected
+
+                center_x = int(detection[0] * width)
+
+                center_y = int(detection[1] * height)
+
+                w = int(detection[2] * width)
+
+                h = int(detection[3] * height)
+
+
+
+                # Rectangle coordinates
+
+                x = int(center_x - w / 2)
+
+                y = int(center_y - h / 2)
+
+
+
+                boxes.append([x, y, w, h])
+
+                confidences.append(float(confidence))
+
+                class_ids.append(class_id)
+
+
+
+    #We use NMS function in opencv to perform Non-maximum Suppression
+
+    #we give it score threshold and nms threshold as arguments.
+
+    indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+
+    colors = np.random.uniform(0, 255, size=(len(classes), 3))
+
+    centers= []
+
+    posearray = PoseArray()
+
+    for i in range(len(boxes)):        
+
+        if i in indexes:
+
+            x, y, w, h = boxes[i]
+
+            pose = Pose()
+
+            label = str(classes[class_ids[i]])
+
+            if class_ids[i] == 0:
+
+                centers.append([x+w//2, y+h//2])
+
+                center_x= x+w//2
+
+                center_y= y+h//2
+
+                pose.position.x= center_x#-320#Tranforming frame to centre of image
+
+                pose.position.y= center_y#-240)
+
+                pose.position.z= 0
+
+                posearray.poses.append(pose)
+                cam_detections.append([center_x,center_y])
+
+    return posearray,cam_detections
+
+#Function for reprojection
+def get_z(T_cam_world, T_world_pc, K):
+    # Function to compute the z-coordinate of the projected points in the camera frame.
+    # T_cam_world is the transformation matrix from camera to world frame,
+    # T_world_pc is the point cloud in world coordinates, and K is the camera intrinsic
+    R = T_cam_world[:3,:3]
+    t = T_cam_world[:3,3]
+    proj_mat = np.dot(K, np.hstack((R, t[:,np.newaxis])))
+    if len(T_world_pc.shape) == 1:
+        T_world_pc = np.atleast_2d(T_world_pc)
+
+    xyz_hom = np.hstack((T_world_pc, np.ones((T_world_pc.shape[0], 1))))
+    xy_hom = np.dot(proj_mat, xyz_hom.T).T
+    z = xy_hom[:, -1]
+    z = np.asarray(z).squeeze()
+    return z
+
+def extract(point):
+    # Extracts the x, y, z coordinates from a PointCloud2 point.
+    # Returns a list of coordinates.
+    return [point[0], point[1], point[2]]
+
+def extract_PoseArray(point):
+    # Extracts the x, y coordinates from a PoseArray point.
+    # Returns a list of coordinates.
+    x=[point.position.x,point.position.y,0]
+    return x
+    
+
+def image_callback(image):
+    # Callback function to handle incoming images.
+    # It converts the ROS Image message to a NumPy array and processes it for object detection
+
+    
+    global img, cam_detections, camposearray
+
+    # Image part
+    img = bridge.imgmsg_to_cv2(image)
+    img=np.array(img)
+    h=image.height
+    w=image.width
+    img_blank=np.zeros((h,w,3))
+    img=np.vstack((img,img_blank))
+    img = np.uint8(img)
+
+    #Image part
+    
+    camposearray,cam_detections=Object_detection_yolo(img) #The positions of people on image is returned as PoseArray and list
+    camposearray.header.stamp=image.header.stamp #Camera Detections have same timestamp as the image itself
+
+def detection_callback(lidar_detections):
+    # Callback function to handle incoming LiDAR detections.
+    # It projects the LiDAR detections onto the camera image and associates them with camera detections 
+    # Time required to execute this callback is 0.0015
+    global entertime,exittime, img, cam_detections, camposearray
+    print('Callback started!')
+
+    entertime=time.time()
+    
+    
+    before_callback_time=rospy.Time.now()
+    before_callback_time_sec=before_callback_time.to_nsec()*(10**(-9))
+
+    # for i in range(len(img_points)):
+    #     try:
+    #         cv2.circle(img, (int(round(img_points[i][0])),int(round(img_points[i][1]))), laser_point_radius, (0,255,0), 1)
+    #     except Exception as err:
+    #         print('!!!!Error:',err)
+    #         continue
+    
+    #Detection part
+
+    lidar_detection_ptime=lidar_detections.header.stamp
+
+    paired_pose_array=[]
+    filtered_pose_array=PoseArray()
+    filtered_pose_array.header= Header(stamp=lidar_detection_ptime,frame_id='lidar') #Filtered poses time will be the detections time. And detections time is the scans time.s
+
+    obj_detected_Points = np.array([extract_PoseArray(point) for point in lidar_detections.poses])
+    if(len(obj_detected_Points)!=0):
+        Z_detections = get_z(q, obj_detected_Points, K)
+        obj_detected_Points=obj_detected_Points[Z_detections>0]
+
+        if ((not np.any(obj_detected_Points))):
+            print("!!!!No detected points from LiDAR. Skipping projection of detected points.!!!!")
+
+        if ((not np.any(cam_detections))):
+            print("!!!!No detected points from Camera. Skipping projection of detected points.!!!!")
+
+
+        else:
+        
+            #try:
+            
+            if lens == 'pinhole':
+                #Detections Projection
+                detected_points, _ = cv2.projectPoints(obj_detected_Points, rvec, tvec, K, D)
+            elif lens == 'fisheye':
+                #Detections Projection
+                obj_detected_Points = np.asarray(obj_detected_Points)  # Ensure NumPy array
+                # Check if single element or 1D array and reshape if necessary
+                #if len(obj_detected_Points.shape) == 0 or obj_detected_Points.shape[0] == 1:
+                obj_detected_Points = np.atleast_2d(obj_detected_Points)
+
+                if(np.shape(obj_detected_Points)==(1,1,3)):
+                    obj_detected_Points=obj_detected_Points[0]
+                obj_detected_Points = np.reshape(obj_detected_Points, (1,obj_detected_Points.shape[0],obj_detected_Points.shape[1]))
+                detected_points, _ = cv2.fisheye.projectPoints(obj_detected_Points, rvec, tvec, K, D)
+
+                
+            
+            detected_points = np.round(np.squeeze(detected_points))
+            detected_points=detected_points.astype(int)
+
+            # <----------- Uncomment this for plotting LIDAR DETECTION in the image ------------------->
+            # for i in range(len(detected_points)):
+            #         if not np.isscalar(detected_points[i]):  # Check if not a scalar
+            #             if len(detected_points[i]) == 2:
+            #                 cv2.circle(img, (int(round(detected_points[i][0])),int(round(detected_points[i][1]))), detection_point_radius, (0,0,255), -1)
+            #             else:
+            #                 print(f"!!!!Error: detected_points[{i}] is not a valid 2D tuple. Skipping circle.!!!!")
+            #         else:
+            #             print(f"!!!!Error: detected_points[{i}] is a scalar after projection. Skipping circle.!!!!")
+            # <------------------------------------ END ----------------------------------------------->
+
+
+                    
+            
+            
+            cost=cost_matrix(detected_points,cam_detections)
+
+            
+
+            #Solve the assignment problem
+            row_indices, col_indices = linear_sum_assignment(cost)
+
+            
+
+            # # Extract the optimal assignment
+            assignment = [(row, col) for row, col in zip(row_indices, col_indices)]
+            
+            for row, col in assignment:
+                dist = np.linalg.norm(np.array(detected_points[row]) - np.array(cam_detections[col]))
+                if dist > MAX_ASSOCIATION_DIST:
+                    print(dist)
+                    print(f"Skipping association between {detected_points[row]} and {cam_detections[col]} due to large distance: {dist}")
+                    continue
+
+                # <----------- Uncomment this for plotting association in the image ------------------->
+                # if isinstance(detected_points[row], (list, np.ndarray)):
+                #     cv2.line(img, detected_points[row], cam_detections[col], (255, 255, 0) , 5) 
+                # else:
+                #     cv2.line(img, detected_points, cam_detections[col], (255, 255, 0) , 5)
+                # <----------------------------------END----------------------------------------------->
+
+                paired_pose=[obj_detected_Points[0][row],cam_detections[col]] #[Laser detections, camera detections]
+                paired_pose_array.append(paired_pose)
+
+            for k in paired_pose_array:
+                filtered_pose=Pose()
+                filtered_pose.position.x,filtered_pose.position.y=k[0][0],k[0][1]
+                filtered_pose_array.poses.append(filtered_pose)
+
+    else:
+        print('!!!!Obj_detected_Points is an empty list!!!!')        
+        
+    after_callback_time=rospy.Time.now()
+    after_callback_time_sec=after_callback_time.to_nsec()*(10**(-9))
+    time_elapse=after_callback_time_sec-before_callback_time_sec
+
+    exittime=time.time()
+    print('Time elapsed:',exittime-entertime)
+
+    
+    if len(filtered_pose_array.poses):
+        filtered_laser_pub.publish(filtered_pose_array)
+
+#Global variables
+ 
+img = None
+img_points = np.zeros((0,2))
+cam_detections = []
+
+rospy.init_node('reprojection')
+entertime=time.time()
+exittime=time.time()
+scan_topic = rospy.get_param("~scan_topic")
+image_topic = rospy.get_param("~image_topic")
+detection_topic = rospy.get_param("~detected_topic") #ADD THIS IN LAUNCH FILE
+calib_file = rospy.get_param("~calib_file")
+config_file = rospy.get_param("~config_file")
+laser_point_radius = rospy.get_param("~laser_point_radius")
+detection_point_radius = rospy.get_param("~detection_point_radius")
+time_diff = rospy.get_param("~time_diff")
+bridge = CvBridge()
+lp = lg.LaserProjection()
+
+print("LOADING YOLO")
+
+rospack = rospkg.RosPack()
+pkg_path = rospack.get_path('camera_2d_lidar_calibration')  # Package name
+cfg_path = os.path.join(pkg_path, 'src', 'yolov4-tiny.cfg')
+weights_path = os.path.join(pkg_path, 'src', 'yolov4-tiny.weights')
+coco_path = os.path.join(pkg_path, 'src', 'coco.names')
+
+# Load YOLO model
+net = cv2.dnn.readNet(cfg_path, weights_path)
+
+#net = cv2.dnn.readNet("/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.cfg","/home/winston/catkin_ws/src/indoor_mobile_robot_perception/camera_2d_lidar_calibration/src/yolov4-tiny.weights")
+
+#save all the names in file of the list classes
+
+classes = []
+
+# Read the class names from the coco.names file
+# This file should contain the names of the classes in YOLO format.
+# Each class name should be on a new line.
+with open(coco_path, "r") as f:
+
+    classes = [line.strip() for line in f.readlines()]
+
+#get layers of the network
+
+layer_names = net.getLayerNames()
+
+#Determine the output layer names from the YOLO model 
+
+output_layers = [layer_names[i- 1] for i in net.getUnconnectedOutLayers()]
+
+print("YOLO LOADED")
+
+
+# Load calibration parameters
+# Read the calibration file and extract the extrinsic parameters (rotation and translation)
+# Read the camera parameters from the config file
+with open(calib_file, 'r') as f:
+    data = f.read().split()
+    qx = float(data[0])
+    qy = float(data[1])
+    qz = float(data[2])
+    qw = float(data[3])
+    tx = float(data[4])
+    ty = float(data[5])
+    tz = float(data[6])
+q = Quaternion(qw,qx,qy,qz).transformation_matrix
+q[0,3] = tx
+q[1,3] = ty
+q[2,3] = tz
+print("Extrinsic parameter - camera to laser")
+print(q)
+tvec = q[:3,3]
+rot_mat = q[:3,:3]
+rvec, _ = cv2.Rodrigues(rot_mat)
+
+with open(config_file, 'r') as f:
+    f.readline()
+    config = yaml.load(f)
+    lens = config['lens']
+    fx = float(config['fx'])
+    fy = float(config['fy'])
+    cx = float(config['cx'])
+    cy = float(config['cy'])
+    k1 = float(config['k1'])
+    k2 = float(config['k2'])
+    p1 = float(config['p1/k3'])
+    p2 = float(config['p2/k4'])  
+K = np.matrix([[fx, 0.0, cx],
+               [0.0, fy, cy],
+               [0.0, 0.0, 1.0]])
+D = np.array([k1, k2, p1, p2])
+print("Camera parameters")
+print("Lens = %s" % lens)
+print("K =")
+print(K)
+print("D =")
+print(D)
+
+pub = rospy.Publisher("/reprojection", Image, queue_size=1)
+detection_pub = rospy.Publisher('/PoseCamera', PoseArray, queue_size=1) #/CameraPoses
+filtered_laser_pub = rospy.Publisher('/PoseFilteredLaser', PoseArray, queue_size=1) 
+
+#scan_sub = rospy.Subscriber(scan_topic, LaserScan, scan_callback, queue_size=1)
+image_sub = rospy.Subscriber(image_topic, Image,image_callback, queue_size=1)
+detection_sub = rospy.Subscriber(detection_topic, PoseArray, detection_callback, queue_size=1) #Added a new subscriber to /LidarPoses Topic
+rospy.spin()
+
+

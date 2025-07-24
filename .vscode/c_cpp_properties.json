@@ -1,0 +1,36 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/asl1/catkin_ws/devel_isolated/tracking/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/rosaria/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/localisation/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/hw_interface/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/hector_nav_msgs/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/hector_mapping/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/global_path_planning/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/camera_localise/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/apriltag_ros/include/**",
+        "/home/asl1/catkin_ws/devel_isolated/amr_control/include/**",
+        "/home/asl1/catkin_ws/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/asl1/catkin_ws/src/indoor_mobile_robot_perception/apriltag_ros/apriltag_ros/include/**",
+        "/home/asl1/catkin_ws/src/hector_slam/hector_geotiff/include/**",
+        "/home/asl1/catkin_ws/src/hector_slam/hector_map_tools/include/**",
+        "/home/asl1/catkin_ws/src/hector_slam/hector_mapping/include/**",
+        "/home/asl1/catkin_ws/src/hector_slam/hector_marker_drawing/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

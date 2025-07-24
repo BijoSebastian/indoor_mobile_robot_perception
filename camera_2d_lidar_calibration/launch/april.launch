@@ -1,0 +1,11 @@
+<launch>
+
+    <node name="apriltag_pose_publisher" pkg="camera_2d_lidar_calibration" type="april_tag_detector2.py" output="screen">
+        <param name="calib_file" value="$(find camera_2d_lidar_calibration)/data/calibration_result.txt" />
+    </node>
+
+    <node name="april_vis" pkg="tracking" type="vis_multiple_april.py" output="screen">
+    </node>
+    
+
+</launch>
